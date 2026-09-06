@@ -17,8 +17,8 @@ void pokedex_layout_build(pokedex_layout_t *out)
     out->screen      = (pokedex_rect_t){0, 0, 240, 320};
     out->header      = (pokedex_rect_t){0, 0, 240, 22};
     out->header_rule = (pokedex_rect_t){0, 22, 240, 2};
-    out->title       = (pokedex_rect_t){8, 4, 70, 16};
-    out->progress    = (pokedex_rect_t){80, 4, 94, 16}; /* "1025/1025" */
+    out->title       = (pokedex_rect_t){8, 4, 80, 16};  /* "POKEDEX" 14px 要约 78px */
+    out->progress    = (pokedex_rect_t){90, 4, 84, 16}; /* "1025/1025" */
     out->battery     = (pokedex_rect_t){178, 4, 54, 16};
 
     out->sprite_frame = (pokedex_rect_t){132, 28, 100, 100};

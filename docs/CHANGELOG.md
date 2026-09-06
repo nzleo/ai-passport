@@ -6,6 +6,9 @@
 
 ## Unreleased
 
+- Boot straight into the offline Pokédex (national dex `1..1025` with
+  embedded 48×48 sprites). Long-press OK still returns to the demo menu,
+  where Pokédex is now the first item.
 - Added the `FAP_SCREENSHOT_V1` serial screen-capture protocol
   (`main/screenshot.c`): a low-priority background task watches the USB
   console for the publisher command and streams the active screen as a
