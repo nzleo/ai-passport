@@ -199,6 +199,106 @@ static void test_scale2x(void)
     CHECK(!pokedex_layout_scale2x_rgb565(buf, 0, 2, buf, 16, &dw, &dh));
 }
 
+static void test_browse_layouts(void)
+{
+    pokedex_list_layout_t L;
+    pokedex_find_layout_t F;
+    pokedex_jump_layout_t J;
+    int i;
+
+    pokedex_list_layout_build(&L);
+    CHECK(pokedex_rect_in_bounds(L.header, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
+    CHECK(pokedex_rect_contains(L.header, L.title));
+    CHECK(pokedex_rect_contains(L.header, L.progress));
+    CHECK(pokedex_rect_contains(L.header, L.battery));
+    CHECK(!pokedex_rect_overlaps(L.title, L.progress));
+    CHECK(!pokedex_rect_overlaps(L.progress, L.battery));
+    for (i = 0; i < POKEDEX_LIST_ROWS; i++) {
+        CHECK(pokedex_rect_in_bounds(L.row[i], POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
+        CHECK(!pokedex_rect_overlaps(L.header, L.row[i]));
+        CHECK(!pokedex_rect_overlaps(L.row[i], L.tally_seen));
+        CHECK(!pokedex_rect_overlaps(L.row[i], L.hint));
+        if (i > 0) CHECK(!pokedex_rect_overlaps(L.row[i - 1], L.row[i]));
+    }
+    CHECK(!pokedex_rect_overlaps(L.tally_seen, L.hint));
+
+    pokedex_find_layout_build(&F);
+    CHECK(!pokedex_rect_overlaps(F.title, F.battery));
+    for (i = 0; i < 11; i++) {
+        CHECK(pokedex_rect_in_bounds(F.row[i], POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
+        CHECK(!pokedex_rect_overlaps(F.header, F.row[i]));
+        CHECK(!pokedex_rect_overlaps(F.row[i], F.hint));
+        if (i > 0) CHECK(!pokedex_rect_overlaps(F.row[i - 1], F.row[i]));
+    }
+
+    pokedex_jump_layout_build(&J);
+    CHECK(pokedex_rect_in_bounds(J.prompt, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
+    for (i = 0; i < 4; i++) {
+        CHECK(pokedex_rect_in_bounds(J.digit[i], POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
+        CHECK(!pokedex_rect_overlaps(J.prompt, J.digit[i]));
+        CHECK(!pokedex_rect_overlaps(J.digit[i], J.hint));
+        if (i > 0) CHECK(!pokedex_rect_overlaps(J.digit[i - 1], J.digit[i]));
+    }
+}
+
+static void test_lang_formatters(void)
+{
+    char buf[64];
+
+    CHECK(strcmp(pokedex_layout_roman_gen(1), "I") == 0);
+    CHECK(strcmp(pokedex_layout_roman_gen(9), "IX") == 0);
+    CHECK(pokedex_layout_roman_gen(0)[0] == '\0');
+
+    pokedex_layout_format_title(POKEDEX_LANG_EN, buf, sizeof(buf));
+    CHECK(strcmp(buf, "POKEDEX") == 0);
+    pokedex_layout_format_title(POKEDEX_LANG_ZH, buf, sizeof(buf));
+    CHECK(strcmp(buf, "图鉴") == 0);
+
+    pokedex_layout_format_list_progress(25, buf, sizeof(buf));
+    CHECK(strcmp(buf, "I 025/151") == 0);
+    pokedex_layout_format_list_progress(152, buf, sizeof(buf));
+    CHECK(strcmp(buf, "II 001/100") == 0);
+    pokedex_layout_format_list_progress(1025, buf, sizeof(buf));
+    CHECK(strcmp(buf, "IX 120/120") == 0);
+
+    pokedex_layout_format_seen_lang(12, POKEDEX_LANG_EN, buf, sizeof(buf));
+    CHECK(strcmp(buf, "12 SEEN") == 0);
+    pokedex_layout_format_seen_lang(12, POKEDEX_LANG_ZH, buf, sizeof(buf));
+    CHECK(strcmp(buf, "已见 12") == 0);
+
+    pokedex_layout_format_stats_lang(4, 60, POKEDEX_LANG_EN, buf, sizeof(buf));
+    CHECK(strcmp(buf, "HT 0.4 m    WT 6.0 kg") == 0);
+    pokedex_layout_format_stats_lang(4, 60, POKEDEX_LANG_ZH, buf, sizeof(buf));
+    CHECK(strcmp(buf, "身高 0.4 m    体重 6.0 kg") == 0);
+
+    pokedex_layout_type_label("electric", POKEDEX_LANG_EN, buf, sizeof(buf));
+    CHECK(strcmp(buf, "ELE") == 0);
+    pokedex_layout_type_label("electric", POKEDEX_LANG_ZH, buf, sizeof(buf));
+    CHECK(strcmp(buf, "电") == 0);
+    pokedex_layout_type_label("fairy", POKEDEX_LANG_ZH, buf, sizeof(buf));
+    CHECK(strcmp(buf, "妖精") == 0);
+
+    pokedex_layout_format_gen_line(1, POKEDEX_LANG_EN, buf, sizeof(buf));
+    CHECK(strcmp(buf, "I     1-151") == 0);
+    pokedex_layout_format_gen_line(3, POKEDEX_LANG_ZH, buf, sizeof(buf));
+    CHECK(strcmp(buf, "第3世代  252-386") == 0);
+
+    pokedex_layout_format_jump_item(POKEDEX_LANG_EN, buf, sizeof(buf));
+    CHECK(strcmp(buf, "GO TO #") == 0);
+    pokedex_layout_format_jump_item(POKEDEX_LANG_ZH, buf, sizeof(buf));
+    CHECK(strcmp(buf, "跳到编号") == 0);
+
+    pokedex_layout_format_name_item(POKEDEX_LANG_EN, buf, sizeof(buf));
+    CHECK(strcmp(buf, "A-Z NAME") == 0);
+    pokedex_layout_format_name_item(POKEDEX_LANG_ZH, buf, sizeof(buf));
+    CHECK(strcmp(buf, "按字母") == 0);
+
+    pokedex_layout_format_letter_line('P', 25, "PIKACHU", buf, sizeof(buf));
+    CHECK(strcmp(buf, "P  #025  PIKACHU") == 0);
+    pokedex_layout_format_letter_line('P', 25, "皮卡丘", buf, sizeof(buf));
+    CHECK(strcmp(buf, "P  #025  皮卡丘") == 0);
+}
+
 static void test_dark_ink(void)
 {
     CHECK(pokedex_layout_dark_ink(0xF7D02C));  /* electric */
@@ -219,6 +319,8 @@ int main(void)
     test_clip_desc();
     test_scale2x();
     test_dark_ink();
+    test_browse_layouts();
+    test_lang_formatters();
 
     if (s_failures) {
         fprintf(stderr, "pokedex_layout: %d check(s) failed\n", s_failures);

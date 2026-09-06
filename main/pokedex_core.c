@@ -109,12 +109,27 @@ uint32_t pokedex_generation(uint32_t id)
     return 0;
 }
 
+uint32_t pokedex_gen_first_n(uint32_t gen)
+{
+    if (gen < 1u || gen > POKEDEX_GEN_COUNT) return 0;
+    if (gen == 1u) return POKEDEX_DEX_FIRST;
+    return (uint32_t)GEN_LAST[gen - 2u] + 1u;
+}
+
+uint32_t pokedex_gen_last_n(uint32_t gen)
+{
+    if (gen < 1u || gen > POKEDEX_GEN_COUNT) return 0;
+    return (uint32_t)GEN_LAST[gen - 1u];
+}
+
 uint32_t pokedex_gen_first(uint32_t id)
 {
-    uint32_t g = pokedex_generation(id);
-    if (g == 0) return 0;
-    if (g == 1) return POKEDEX_DEX_FIRST;
-    return (uint32_t)GEN_LAST[g - 2u] + 1u;
+    return pokedex_gen_first_n(pokedex_generation(id));
+}
+
+uint32_t pokedex_gen_last(uint32_t id)
+{
+    return pokedex_gen_last_n(pokedex_generation(id));
 }
 
 uint32_t pokedex_step_gen(uint32_t id, int32_t dir)
@@ -127,7 +142,171 @@ uint32_t pokedex_step_gen(uint32_t id, int32_t dir)
     } else {
         g = (g == POKEDEX_GEN_COUNT) ? 1u : (g + 1u);
     }
-    return (g == 1u) ? POKEDEX_DEX_FIRST : ((uint32_t)GEN_LAST[g - 2u] + 1u);
+    return pokedex_gen_first_n(g);
+}
+
+uint32_t pokedex_step_in_gen(uint32_t id, int32_t delta)
+{
+    uint32_t first;
+    uint32_t last;
+    int32_t span;
+    int32_t off;
+
+    if (!pokedex_id_in_range(id)) id = POKEDEX_DEX_FIRST;
+    first = pokedex_gen_first(id);
+    last = pokedex_gen_last(id);
+    span = (int32_t)(last - first + 1u);
+    off = (int32_t)(id - first) + delta;
+    off %= span;
+    if (off < 0) off += span;
+    return first + (uint32_t)off;
+}
+
+uint32_t pokedex_window_first(uint32_t id, uint32_t first, uint32_t last,
+                              uint32_t rows)
+{
+    uint32_t span;
+    uint32_t focus;
+    int32_t start;
+
+    if (last < first) return first;
+    if (rows == 0) {
+        if (id < first) return first;
+        if (id > last) return last;
+        return id;
+    }
+    if (id < first) id = first;
+    if (id > last) id = last;
+    span = last - first + 1u;
+    if (span <= rows) return first;
+    focus = (rows > 2u) ? 2u : 0u;
+    start = (int32_t)id - (int32_t)focus;
+    if (start < (int32_t)first) start = (int32_t)first;
+    if (start + (int32_t)rows - 1 > (int32_t)last) {
+        start = (int32_t)last - (int32_t)rows + 1;
+    }
+    return (uint32_t)start;
+}
+
+uint32_t pokedex_list_window_first(uint32_t id, uint32_t rows)
+{
+    if (!pokedex_id_in_range(id)) id = POKEDEX_DEX_FIRST;
+    return pokedex_window_first(id, pokedex_gen_first(id),
+                                pokedex_gen_last(id), rows);
+}
+
+uint32_t pokedex_find_step(uint32_t sel, int32_t delta)
+{
+    int32_t n = (int32_t)POKEDEX_FIND_COUNT;
+    int32_t v = (int32_t)(sel % (uint32_t)n) + delta;
+    v %= n;
+    if (v < 0) v += n;
+    return (uint32_t)v;
+}
+
+uint32_t pokedex_find_sel_for_id(uint32_t id)
+{
+    uint32_t g = pokedex_generation(id);
+    return (g == 0u) ? (POKEDEX_FIND_NAME + 1u) : (g + 1u);
+}
+
+uint32_t pokedex_find_sel_to_gen(uint32_t sel)
+{
+    if (sel <= POKEDEX_FIND_NAME || sel >= POKEDEX_FIND_COUNT) return 0;
+    return sel - 1u;
+}
+
+char pokedex_en_initial(const char *raw)
+{
+    if (!raw) return '?';
+    for (; *raw; raw++) {
+        char c = *raw;
+        if (c >= 'a' && c <= 'z') return (char)(c - 'a' + 'A');
+        if (c >= 'A' && c <= 'Z') return c;
+    }
+    return '?';
+}
+
+uint32_t pokedex_step_key_in_range(uint32_t id, int32_t dir,
+                                   uint32_t first, uint32_t last,
+                                   uint32_t (*key_of)(uint32_t))
+{
+    uint32_t key;
+    uint32_t i;
+    int32_t step;
+
+    if (!key_of || last < first) return id;
+    if (id < first || id > last) id = first;
+    if (dir == 0) return id;
+    step = (dir < 0) ? -1 : 1;
+    key = key_of(id);
+    i = id;
+    do {
+        int32_t n = (int32_t)i + step;
+        if (n < (int32_t)first) n = (int32_t)last;
+        if (n > (int32_t)last) n = (int32_t)first;
+        i = (uint32_t)n;
+        if (i == id) return id;
+    } while (key_of(i) == key);
+    if (step < 0) {
+        uint32_t k2 = key_of(i);
+        for (;;) {
+            int32_t p = (int32_t)i - 1;
+            if (p < (int32_t)first) break;
+            if (key_of((uint32_t)p) != k2) break;
+            i = (uint32_t)p;
+        }
+    }
+    return i;
+}
+
+uint32_t pokedex_jump_clamp(uint32_t n)
+{
+    if (n < POKEDEX_DEX_FIRST) return POKEDEX_DEX_FIRST;
+    if (n > POKEDEX_DEX_LAST) return POKEDEX_DEX_LAST;
+    return n;
+}
+
+void pokedex_jump_to_digits(uint32_t n, uint8_t d[4])
+{
+    if (!d) return;
+    n = pokedex_jump_clamp(n);
+    d[0] = (uint8_t)((n / 1000u) % 10u);
+    d[1] = (uint8_t)((n / 100u) % 10u);
+    d[2] = (uint8_t)((n / 10u) % 10u);
+    d[3] = (uint8_t)(n % 10u);
+}
+
+uint32_t pokedex_jump_from_digits(const uint8_t d[4])
+{
+    uint32_t n;
+
+    if (!d) return POKEDEX_DEX_FIRST;
+    n = (uint32_t)d[0] * 1000u + (uint32_t)d[1] * 100u
+      + (uint32_t)d[2] * 10u + (uint32_t)d[3];
+    return pokedex_jump_clamp(n);
+}
+
+uint32_t pokedex_jump_nudge_digit(uint32_t n, unsigned pos, int32_t dir)
+{
+    uint8_t d[4];
+
+    if (pos > 3u) pos = 3u;
+    pokedex_jump_to_digits(n, d);
+    {
+        int32_t v = (int32_t)d[pos] + (dir < 0 ? -1 : 1);
+        if (v < 0) v = 9;
+        if (v > 9) v = 0;
+        d[pos] = (uint8_t)v;
+    }
+    return pokedex_jump_from_digits(d);
+}
+
+unsigned pokedex_jump_cursor_move(unsigned pos, int32_t dir)
+{
+    if (pos > 3u) pos = 3u;
+    if (dir < 0) return pos == 0u ? 3u : pos - 1u;
+    return pos == 3u ? 0u : pos + 1u;
 }
 
 // ============================================================================

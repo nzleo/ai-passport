@@ -11,9 +11,15 @@
 #define POKEDEX_LAYOUT_W          240
 #define POKEDEX_LAYOUT_H          320
 #define POKEDEX_LAYOUT_SPRITE_PX  96   /* 48px 像素图最近邻 2x */
-#define POKEDEX_LAYOUT_BADGE_W    44   /* 3 字母属性芯片 */
+#define POKEDEX_LAYOUT_BADGE_W    44   /* 3 字母 / 2 汉字属性芯片 */
 #define POKEDEX_LAYOUT_BADGE_H    18
 #define POKEDEX_LAYOUT_DESC_MAX   130  /* 概述约 5 行,Montserrat 14 */
+#define POKEDEX_LIST_ROWS         7
+
+typedef enum {
+    POKEDEX_LANG_EN = 0,
+    POKEDEX_LANG_ZH = 1,
+} pokedex_lang_t;
 
 typedef struct {
     int16_t x, y, w, h;
@@ -42,8 +48,44 @@ typedef struct {
     pokedex_rect_t hint;
 } pokedex_layout_t;
 
+typedef struct {
+    pokedex_rect_t screen;
+    pokedex_rect_t header;
+    pokedex_rect_t header_rule;
+    pokedex_rect_t title;
+    pokedex_rect_t progress;
+    pokedex_rect_t battery;
+    pokedex_rect_t row[POKEDEX_LIST_ROWS];
+    pokedex_rect_t tally_seen;
+    pokedex_rect_t hint;
+} pokedex_list_layout_t;
+
+typedef struct {
+    pokedex_rect_t screen;
+    pokedex_rect_t header;
+    pokedex_rect_t header_rule;
+    pokedex_rect_t title;
+    pokedex_rect_t battery;
+    pokedex_rect_t row[11]; /* 跳号 + 按字母 + 9 世代 */
+    pokedex_rect_t hint;
+} pokedex_find_layout_t;
+
+typedef struct {
+    pokedex_rect_t screen;
+    pokedex_rect_t header;
+    pokedex_rect_t header_rule;
+    pokedex_rect_t title;
+    pokedex_rect_t battery;
+    pokedex_rect_t prompt;
+    pokedex_rect_t digit[4];
+    pokedex_rect_t hint;
+} pokedex_jump_layout_t;
+
 // 填入固定的掌上图鉴骨架。调用方可直接拿矩形去放 LVGL 对象。
 void pokedex_layout_build(pokedex_layout_t *out);
+void pokedex_list_layout_build(pokedex_list_layout_t *out);
+void pokedex_find_layout_build(pokedex_find_layout_t *out);
+void pokedex_jump_layout_build(pokedex_jump_layout_t *out);
 
 bool pokedex_rect_in_bounds(pokedex_rect_t r, int w, int h);
 bool pokedex_rect_overlaps(pokedex_rect_t a, pokedex_rect_t b);
@@ -59,6 +101,23 @@ int pokedex_layout_format_caught(uint32_t n, char *buf, size_t cap);
 int pokedex_layout_format_seen(uint32_t n, char *buf, size_t cap);
 int pokedex_layout_format_stats(int height_dm, int weight_hg,
                                 char *buf, size_t cap);
+
+const char *pokedex_layout_roman_gen(uint32_t gen);
+int pokedex_layout_type_label(const char *type_name, pokedex_lang_t lang,
+                              char *buf, size_t cap);
+int pokedex_layout_format_title(pokedex_lang_t lang, char *buf, size_t cap);
+int pokedex_layout_format_list_progress(uint32_t id, char *buf, size_t cap);
+int pokedex_layout_format_seen_lang(uint32_t n, pokedex_lang_t lang,
+                                    char *buf, size_t cap);
+int pokedex_layout_format_stats_lang(int height_dm, int weight_hg,
+                                     pokedex_lang_t lang,
+                                     char *buf, size_t cap);
+int pokedex_layout_format_gen_line(uint32_t gen, pokedex_lang_t lang,
+                                   char *buf, size_t cap);
+int pokedex_layout_format_jump_item(pokedex_lang_t lang, char *buf, size_t cap);
+int pokedex_layout_format_name_item(pokedex_lang_t lang, char *buf, size_t cap);
+int pokedex_layout_format_letter_line(char letter, uint32_t id, const char *name,
+                                      char *buf, size_t cap);
 
 // 超长概述截断并加 "...";max_chars==0 时用 POKEDEX_LAYOUT_DESC_MAX。
 size_t pokedex_layout_clip_desc(const char *src, char *dst, size_t dst_cap,

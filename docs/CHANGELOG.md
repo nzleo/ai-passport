@@ -6,6 +6,17 @@
 
 ## Unreleased
 
+- Pokédex browsing is now a list plus a Find hub: the page opens on a
+  generation list (click ±1, double-click jumps to the next English-initial
+  group, long-press UP/DOWN opens Find). Find lists jump-to-number, an A–Z
+  name index, and the nine generations; the jump pad edits four digits.
+  Detail stays the sprite/flavor card (OK plays the cry). Long-press OK
+  leaves the list for the demo menu and pops Find/detail back to the list.
+  Double-click OK switches English/Chinese (names, flavor, UI) and stores
+  the choice in NVS. The Chinese 4bpp font now uses per-line stride so
+  odd-width glyphs no longer scramble. Serial debug commands
+  `FAP_POKEDEX_VIEW`, `FAP_POKEDEX_LANG`, and `FAP_POKEDEX_ID` move the
+  page for screenshots.
 - Boot straight into the offline Pokédex (national dex `1..1025` with
   embedded 48×48 sprites). Long-press OK still returns to the demo menu,
   where Pokédex is now the first item.

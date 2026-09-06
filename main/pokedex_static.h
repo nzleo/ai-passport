@@ -17,7 +17,9 @@ typedef struct {
     uint8_t  type0;   /* POKEDEX_STATIC_TYPE_* 索引 */
     uint8_t  type1;   /* 0xFF = 无第二属性 */
     char     name[16];
+    char     name_zh[24];
     char     desc[POKEDEX_DESC_MAX]; /* 英文图鉴描述 */
+    char     desc_zh[POKEDEX_DESC_MAX]; /* 简体中文图鉴描述 */
 } pokedex_static_entry_t;
 
 enum {
@@ -45,6 +47,7 @@ enum {
 
 extern const pokedex_static_entry_t pokedex_static_dex[1026]; /* 下标=id */
 extern const char *pokedex_static_type_names[POKEDEX_STATIC_TYPE_COUNT];
+extern const char *pokedex_static_type_names_zh[POKEDEX_STATIC_TYPE_COUNT];
 
 // 精灵图 blob 的 TOC/数据位于 pokedex_sprites.bin(由 CMake 嵌入):
 extern const uint8_t _binary_pokedex_sprites_bin_start[];

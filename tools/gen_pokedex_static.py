@@ -9,6 +9,7 @@
                               TOC(1025 x {off,len,w,h}) + 压缩数据。
 
 用法:python3 tools/gen_pokedex_static.py
+      python3 tools/gen_pokedex_static.py --data-only   # 只重写 .c/.h,不碰精灵图 blob
 可选环境变量:
   POKEDEX_CACHE  默认 /tmp/ai-passport-pokedex-cache(JSON/PNG 断点续传)
   POKEDEX_LAST   默认 1025(全国种上限)
@@ -17,6 +18,7 @@
 """
 from __future__ import annotations
 
+import argparse
 import concurrent.futures
 import io
 import json
@@ -39,7 +41,8 @@ DEX_W, DEX_H = 48, 48
 PIXELS = DEX_W * DEX_H
 BPP = 2
 SPRITE_BYTES = PIXELS * BPP
-DESC_MAX = 192  # 英文 flavor text 截断长度(含 NUL)
+DESC_MAX = 192  # flavor text 截断长度(含 NUL)
+NAME_ZH_MAX = 24  # 中文种名(含 NUL)
 DEX_FIRST = 1
 DEX_LAST = int(os.environ.get("POKEDEX_LAST", "1025"))
 CACHE = os.environ.get("POKEDEX_CACHE", "/tmp/ai-passport-pokedex-cache")
@@ -107,14 +110,73 @@ def raw_deflate(data: bytes, level: int = 9) -> bytes:
     return c.compress(data) + c.flush()
 
 
-def parse_desc_from_obj(j: dict) -> str:
-    for e in j.get("flavor_text_entries", []):
-        if e.get("language", {}).get("name") != "en":
-            continue
-        t = e["flavor_text"].replace("\n", " ").replace("\x0c", " ").replace("\r", " ")
-        t = " ".join(t.split())
+TYPE_ZH = {
+    "bug": "虫",
+    "dark": "恶",
+    "dragon": "龙",
+    "electric": "电",
+    "fairy": "妖精",
+    "fighting": "格斗",
+    "fire": "火",
+    "flying": "飞行",
+    "ghost": "幽灵",
+    "grass": "草",
+    "ground": "地面",
+    "ice": "冰",
+    "normal": "一般",
+    "poison": "毒",
+    "psychic": "超能",
+    "rock": "岩石",
+    "steel": "钢",
+    "water": "水",
+}
+
+
+def utf8_clip(s: str, max_bytes: int) -> str:
+    raw = s.encode("utf-8")
+    if len(raw) <= max_bytes:
+        return s
+    raw = raw[:max_bytes]
+    while raw and (raw[-1] & 0xC0) == 0x80:
+        raw = raw[:-1]
+    if raw and (raw[-1] & 0x80):
+        # 若最后一字节是多字节序列的起始/中间,整段丢掉
+        i = len(raw) - 1
+        while i >= 0 and (raw[i] & 0xC0) == 0x80:
+            i -= 1
+        if i >= 0 and (raw[i] & 0x80):
+            raw = raw[:i]
+    return raw.decode("utf-8", errors="ignore")
+
+
+def clean_flavor(t: str, ascii_only: bool) -> str:
+    t = t.replace("\n", " ").replace("\x0c", " ").replace("\r", " ")
+    t = " ".join(t.split())
+    if ascii_only:
         t = unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode("ascii")
-        return t[: DESC_MAX - 1]
+    return t
+
+
+def pick_name(species: dict, *langs: str) -> str:
+    for lang in langs:
+        want = lang.lower()
+        for n in species.get("names", []):
+            if (n.get("language", {}).get("name") or "").lower() == want:
+                name = (n.get("name") or "").strip()
+                if name:
+                    return name
+    return ""
+
+
+def parse_desc_from_obj(j: dict, *langs: str, ascii_only: bool = False) -> str:
+    for lang in langs:
+        want = lang.lower()
+        for e in j.get("flavor_text_entries", []):
+            if (e.get("language", {}).get("name") or "").lower() != want:
+                continue
+            t = clean_flavor(e.get("flavor_text") or "", ascii_only)
+            if t:
+                return utf8_clip(t, DESC_MAX - 1)
     return ""
 
 
@@ -131,8 +193,12 @@ def load_row(id_: int):
         name = species.get("name") or j["name"]
         if len(name) >= 16:
             name = name[:15]
-        desc = parse_desc_from_obj(species)
-        return id_, name, int(j["height"]), int(j["weight"]), types, desc
+        name_zh = utf8_clip(pick_name(species, "zh-hans", "zh-hant"), NAME_ZH_MAX - 1)
+        desc = parse_desc_from_obj(species, "en", ascii_only=True)
+        desc_zh = parse_desc_from_obj(species, "zh-hans", "zh-hant")
+        if not desc_zh:
+            desc_zh = desc  # 部分物种 PokeAPI 无中文概述,回退英文以免空白
+        return id_, name, name_zh, int(j["height"]), int(j["weight"]), types, desc, desc_zh
     except Exception as e:  # noqa: BLE001
         print(f"  warn: id={id_} fetch failed: {e}")
         return id_, None, 0, 0, [], ""
@@ -150,10 +216,15 @@ def load_sprite(id_: int):
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser(description="生成 Pokédex 离线静态数据库")
+    ap.add_argument("--data-only", action="store_true",
+                    help="只重写 pokedex_static.c/.h,不重新生成精灵图 blob")
+    args = ap.parse_args()
+
     os.makedirs(CACHE, exist_ok=True)
     ids = list(range(DEX_FIRST, DEX_LAST + 1))
 
-    print(f"拉取 {len(ids)} 条宝可梦数据(含英文描述,cache={CACHE}) ...")
+    print(f"拉取 {len(ids)} 条宝可梦数据(含中英描述,cache={CACHE}) ...")
     rows = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
         for i, r in enumerate(ex.map(load_row, ids), 1):
@@ -164,30 +235,36 @@ def main() -> None:
     missing = [id_ for id_, name, *_ in rows if not name]
     if missing:
         raise SystemExit(f"缺少 {len(missing)} 条数据,例如 {missing[:8]}")
+    missing_zh = [id_ for id_, _n, name_zh, *_ in rows if not name_zh]
+    if missing_zh:
+        raise SystemExit(f"缺少 {len(missing_zh)} 条中文名,例如 {missing_zh[:8]}")
 
-    print("拉取并压缩精灵图 ...")
-    sprites: dict[int, bytes] = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
-        for i, (id_, comp) in enumerate(ex.map(load_sprite, ids), 1):
-            sprites[id_] = comp if comp is not None else raw_deflate(bytes(SPRITE_BYTES))
-            if i % 50 == 0 or i == len(ids):
-                print(f"  sprite {i}/{len(ids)}")
+    if not args.data_only:
+        print("拉取并压缩精灵图 ...")
+        sprites: dict[int, bytes] = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            for i, (id_, comp) in enumerate(ex.map(load_sprite, ids), 1):
+                sprites[id_] = comp if comp is not None else raw_deflate(bytes(SPRITE_BYTES))
+                if i % 50 == 0 or i == len(ids):
+                    print(f"  sprite {i}/{len(ids)}")
 
-    toc = []
-    blob = bytearray()
-    for id_ in ids:
-        comp = sprites[id_]
-        toc.append((len(blob), len(comp), DEX_W, DEX_H))
-        blob += comp
+        toc = []
+        blob = bytearray()
+        for id_ in ids:
+            comp = sprites[id_]
+            toc.append((len(blob), len(comp), DEX_W, DEX_H))
+            blob += comp
 
-    os.makedirs(os.path.dirname(OUT_BIN) or ".", exist_ok=True)
-    with open(OUT_BIN, "wb") as f:
-        for off, ln, w, h in toc:
-            f.write(struct.pack("<IIHH", off, ln, w, h))
-        f.write(blob)
-    print(f"  {OUT_BIN}: {len(blob) + len(toc) * 12} bytes (压缩后数据 {len(blob)}B)")
+        os.makedirs(os.path.dirname(OUT_BIN) or ".", exist_ok=True)
+        with open(OUT_BIN, "wb") as f:
+            for off, ln, w, h in toc:
+                f.write(struct.pack("<IIHH", off, ln, w, h))
+            f.write(blob)
+        print(f"  {OUT_BIN}: {len(blob) + len(toc) * 12} bytes (压缩后数据 {len(blob)}B)")
+    else:
+        print("跳过精灵图(--data-only)")
 
-    types_all = sorted({t for _, _, _, _, ts, _ in rows for t in ts})
+    types_all = sorted({t for _, _n, _zh, _h, _w, ts, _d, _dz in rows for t in ts})
     type_idx = {t: i for i, t in enumerate(types_all)}
     print(f"  types: {len(types_all)} -> {types_all}")
 
@@ -208,14 +285,17 @@ def main() -> None:
                 "    uint8_t  type0;   /* POKEDEX_STATIC_TYPE_* 索引 */\n"
                 "    uint8_t  type1;   /* 0xFF = 无第二属性 */\n"
                 "    char     name[16];\n"
+                f"    char     name_zh[{NAME_ZH_MAX}];\n"
                 "    char     desc[POKEDEX_DESC_MAX]; /* 英文图鉴描述 */\n"
+                "    char     desc_zh[POKEDEX_DESC_MAX]; /* 简体中文图鉴描述 */\n"
                 "} pokedex_static_entry_t;\n\n")
         f.write("enum {\n")
         for i, t in enumerate(types_all):
             f.write(f"    POKEDEX_STATIC_TYPE_{t.upper().replace('-', '_')} = {i},\n")
         f.write("    POKEDEX_STATIC_TYPE_COUNT,\n    POKEDEX_STATIC_TYPE_NONE = 0xFF,\n};\n\n")
         f.write(f"extern const pokedex_static_entry_t pokedex_static_dex[{n_entries}]; /* 下标=id */\n")
-        f.write("extern const char *pokedex_static_type_names[POKEDEX_STATIC_TYPE_COUNT];\n\n")
+        f.write("extern const char *pokedex_static_type_names[POKEDEX_STATIC_TYPE_COUNT];\n")
+        f.write("extern const char *pokedex_static_type_names_zh[POKEDEX_STATIC_TYPE_COUNT];\n\n")
         f.write("// 精灵图 blob 的 TOC/数据位于 pokedex_sprites.bin(由 CMake 嵌入):\n")
         f.write("extern const uint8_t _binary_pokedex_sprites_bin_start[];\n")
         f.write("extern const uint8_t _binary_pokedex_sprites_bin_end[];\n")
@@ -228,12 +308,19 @@ def main() -> None:
         for t in types_all:
             f.write(f'    "{t}",\n')
         f.write("};\n\n")
+        f.write("const char *pokedex_static_type_names_zh[POKEDEX_STATIC_TYPE_COUNT] = {\n")
+        for t in types_all:
+            f.write(f'    "{cstr(TYPE_ZH.get(t, t))}",\n')
+        f.write("};\n\n")
         f.write(f"const pokedex_static_entry_t pokedex_static_dex[{n_entries}] = {{\n")
         f.write("    [0] = {0},\n")
-        for id_, name, h, w, ts, desc in rows:
+        for id_, name, name_zh, h, w, ts, desc, desc_zh in rows:
             t0 = type_idx.get(ts[0], 0) if ts else 0
             t1 = type_idx.get(ts[1], 0xFF) if len(ts) > 1 else 0xFF
-            f.write(f'    [{id_}] = {{ {id_}, {h}, {w}, {t0}, {t1}, "{name}", "{cstr(desc)}" }},\n')
+            f.write(
+                f'    [{id_}] = {{ {id_}, {h}, {w}, {t0}, {t1}, '
+                f'"{name}", "{cstr(name_zh)}", "{cstr(desc)}", "{cstr(desc_zh)}" }},\n'
+            )
         f.write("};\n")
 
     print(f"  {OUT_H} / {OUT_C} 生成完成")

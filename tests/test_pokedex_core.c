@@ -98,6 +98,72 @@ static void test_generation(void)
     CHECK(pokedex_step_gen(25, -1) == 906);  /* I → IX */
     CHECK(pokedex_step_gen(200, -1) == 1);   /* II → I */
     CHECK(pokedex_step_gen(0, 1) == 152);    /* 越界按 I 处理后进 II */
+
+    CHECK(pokedex_gen_last(25) == 151);
+    CHECK(pokedex_gen_last(200) == 251);
+    CHECK(pokedex_gen_last(1025) == 1025);
+    CHECK(pokedex_gen_first_n(1) == 1);
+    CHECK(pokedex_gen_first_n(3) == 252);
+    CHECK(pokedex_gen_last_n(9) == 1025);
+    CHECK(pokedex_gen_first_n(0) == 0);
+    CHECK(pokedex_gen_last_n(10) == 0);
+
+    CHECK(pokedex_step_in_gen(1, -1) == 151);
+    CHECK(pokedex_step_in_gen(151, 1) == 1);
+    CHECK(pokedex_step_in_gen(25, 10) == 35);
+    CHECK(pokedex_step_in_gen(152, -1) == 251);
+    CHECK(pokedex_step_in_gen(0, 1) == 2);
+
+    CHECK(pokedex_list_window_first(1, 7) == 1);
+    CHECK(pokedex_list_window_first(3, 7) == 1);
+    CHECK(pokedex_list_window_first(25, 7) == 23);
+    CHECK(pokedex_list_window_first(151, 7) == 145);
+    CHECK(pokedex_list_window_first(152, 7) == 152);
+    CHECK(pokedex_list_window_first(1025, 7) == 1019);
+    CHECK(pokedex_list_window_first(10, 200) == 1); /* 世代短于窗口则从世代头起 */
+
+    CHECK(pokedex_find_step(0, -1) == 10);
+    CHECK(pokedex_find_step(10, 1) == 0);
+    CHECK(pokedex_find_step(3, 2) == 5);
+    CHECK(pokedex_find_sel_for_id(25) == 2);
+    CHECK(pokedex_find_sel_for_id(200) == 3);
+    CHECK(pokedex_find_sel_for_id(1025) == 10);
+    CHECK(pokedex_find_sel_to_gen(0) == 0);
+    CHECK(pokedex_find_sel_to_gen(1) == 0);
+    CHECK(pokedex_find_sel_to_gen(2) == 1);
+    CHECK(pokedex_find_sel_to_gen(10) == 9);
+    CHECK(pokedex_find_sel_to_gen(11) == 0);
+
+    CHECK(pokedex_en_initial("pikachu") == 'P');
+    CHECK(pokedex_en_initial("mr-mime") == 'M');
+    CHECK(pokedex_en_initial("nidoran-f") == 'N');
+    CHECK(pokedex_en_initial("") == '?');
+    CHECK(pokedex_en_initial(NULL) == '?');
+
+    CHECK(pokedex_window_first(3, 0, 25, 7) == 1);
+    CHECK(pokedex_window_first(0, 0, 25, 7) == 0);
+    CHECK(pokedex_window_first(25, 0, 25, 7) == 19);
+
+    CHECK(pokedex_jump_clamp(0) == 1);
+    CHECK(pokedex_jump_clamp(2000) == 1025);
+    CHECK(pokedex_jump_clamp(25) == 25);
+    {
+        uint8_t d[4];
+        pokedex_jump_to_digits(25, d);
+        CHECK(d[0] == 0 && d[1] == 0 && d[2] == 2 && d[3] == 5);
+        CHECK(pokedex_jump_from_digits(d) == 25);
+        pokedex_jump_to_digits(1025, d);
+        CHECK(d[0] == 1 && d[1] == 0 && d[2] == 2 && d[3] == 5);
+        CHECK(pokedex_jump_from_digits(d) == 1025);
+    }
+    CHECK(pokedex_jump_nudge_digit(25, 3, 1) == 26);
+    CHECK(pokedex_jump_nudge_digit(25, 3, -1) == 24);
+    CHECK(pokedex_jump_nudge_digit(20, 3, -1) == 29); /* 个位 0→9, 0029 */
+    CHECK(pokedex_jump_nudge_digit(1025, 0, 1) == 1025); /* 千位 1→2 → 2025 钳到 1025 */
+    CHECK(pokedex_jump_nudge_digit(25, 0, -1) == 1025);  /* 千位 0→9 → 9025 钳到 1025 */
+    CHECK(pokedex_jump_cursor_move(0, -1) == 3);
+    CHECK(pokedex_jump_cursor_move(3, 1) == 0);
+    CHECK(pokedex_jump_cursor_move(1, 1) == 2);
 }
 
 static void test_serialize_roundtrip(void)
@@ -291,11 +357,31 @@ static void test_fit_scaled(void)
     CHECK(dw >= 1 && dh >= 1 && dw <= 96 && dh <= 96);
 }
 
+static uint32_t fake_letter_key(uint32_t id)
+{
+    /* 1-2:A  3:B  4-5:C */
+    static const char keys[] = {0, 'A', 'A', 'B', 'C', 'C'};
+    if (id < 1 || id > 5) return '?';
+    return (uint32_t)keys[id];
+}
+
+static void test_step_key(void)
+{
+    CHECK(pokedex_step_key_in_range(1, 1, 1, 5, fake_letter_key) == 3);
+    CHECK(pokedex_step_key_in_range(3, 1, 1, 5, fake_letter_key) == 4);
+    CHECK(pokedex_step_key_in_range(4, 1, 1, 5, fake_letter_key) == 1);
+    CHECK(pokedex_step_key_in_range(3, -1, 1, 5, fake_letter_key) == 1);
+    CHECK(pokedex_step_key_in_range(1, -1, 1, 5, fake_letter_key) == 4);
+    CHECK(pokedex_step_key_in_range(5, -1, 1, 5, fake_letter_key) == 3);
+    CHECK(pokedex_step_key_in_range(2, 0, 1, 5, fake_letter_key) == 2);
+}
+
 int main(void)
 {
     test_init_and_bitmap();
     test_step();
     test_generation();
+    test_step_key();
     test_serialize_roundtrip();
     test_serialize_invalid();
     test_v1_migrate();

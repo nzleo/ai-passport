@@ -3,7 +3,7 @@
 // 按键语义(全局统一):
 //   上/下 短按   菜单中=移动选中项;演示页中=该页自定义
 //   确定  短按   菜单中=进入选中项;演示页中=该页自定义
-//   确定  长按   演示页中=返回菜单(由本文件统一拦截)
+//   确定  长按   演示页中=返回菜单;图鉴在非列表页时先自行退回列表
 #include "bsp_i2c.h"
 #include "bsp_display.h"
 #include "bsp_button.h"
@@ -83,9 +83,13 @@ static void on_key(bsp_btn_t btn, bsp_btn_ev_t ev, void *user) {
     if (!bsp_lvgl_lock(500)) return;
 
     if (s_active >= 0) {
-        if (btn == BSP_BTN_OK && ev == BSP_BTN_LONG) {     // 统一返回
-            DEMOS[s_active].exit();
-            enter_menu();
+        if (btn == BSP_BTN_OK && ev == BSP_BTN_LONG) {
+            if (s_active == DEMO_POKEDEX && !demo_pokedex_at_root()) {
+                DEMOS[s_active].key(btn, ev);              // 图鉴:详情/查找退回列表
+            } else {
+                DEMOS[s_active].exit();
+                enter_menu();
+            }
         } else {
             DEMOS[s_active].key(btn, ev);
         }

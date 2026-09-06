@@ -41,8 +41,62 @@ void pokedex_layout_build(pokedex_layout_t *out)
     out->flavor_inner = (pokedex_rect_t){10, 162, 220, 104};
     out->flavor_text  = (pokedex_rect_t){14, 166, 212, 96};
 
-    out->tally_seen   = (pokedex_rect_t){8, 272, 224, 20};
-    out->hint         = (pokedex_rect_t){8, 296, 224, 16};
+    out->tally_seen   = (pokedex_rect_t){8, 270, 224, 16};
+    out->hint         = (pokedex_rect_t){8, 288, 224, 32};
+}
+
+void pokedex_list_layout_build(pokedex_list_layout_t *out)
+{
+    int i;
+
+    if (!out) return;
+    memset(out, 0, sizeof(*out));
+    out->screen      = (pokedex_rect_t){0, 0, 240, 320};
+    out->header      = (pokedex_rect_t){0, 0, 240, 22};
+    out->header_rule = (pokedex_rect_t){0, 22, 240, 2};
+    out->title       = (pokedex_rect_t){8, 4, 72, 16};
+    out->progress    = (pokedex_rect_t){82, 4, 92, 16}; /* "I 025/151" */
+    out->battery     = (pokedex_rect_t){178, 4, 54, 16};
+    for (i = 0; i < POKEDEX_LIST_ROWS; i++) {
+        out->row[i] = (pokedex_rect_t){8, (int16_t)(28 + i * 30), 224, 28};
+    }
+    out->tally_seen = (pokedex_rect_t){8, 260, 224, 18};
+    out->hint       = (pokedex_rect_t){8, 280, 224, 38};
+}
+
+void pokedex_find_layout_build(pokedex_find_layout_t *out)
+{
+    int i;
+
+    if (!out) return;
+    memset(out, 0, sizeof(*out));
+    out->screen      = (pokedex_rect_t){0, 0, 240, 320};
+    out->header      = (pokedex_rect_t){0, 0, 240, 22};
+    out->header_rule = (pokedex_rect_t){0, 22, 240, 2};
+    out->title       = (pokedex_rect_t){8, 4, 120, 16};
+    out->battery     = (pokedex_rect_t){178, 4, 54, 16};
+    for (i = 0; i < 11; i++) {
+        out->row[i] = (pokedex_rect_t){8, (int16_t)(26 + i * 22), 224, 20};
+    }
+    out->hint = (pokedex_rect_t){8, 280, 224, 38};
+}
+
+void pokedex_jump_layout_build(pokedex_jump_layout_t *out)
+{
+    int i;
+
+    if (!out) return;
+    memset(out, 0, sizeof(*out));
+    out->screen      = (pokedex_rect_t){0, 0, 240, 320};
+    out->header      = (pokedex_rect_t){0, 0, 240, 22};
+    out->header_rule = (pokedex_rect_t){0, 22, 240, 2};
+    out->title       = (pokedex_rect_t){8, 4, 120, 16};
+    out->battery     = (pokedex_rect_t){178, 4, 54, 16};
+    out->prompt      = (pokedex_rect_t){8, 80, 224, 24};
+    for (i = 0; i < 4; i++) {
+        out->digit[i] = (pokedex_rect_t){(int16_t)(25 + i * 50), 120, 40, 56};
+    }
+    out->hint = (pokedex_rect_t){8, 280, 224, 38};
 }
 
 bool pokedex_rect_in_bounds(pokedex_rect_t r, int w, int h)
@@ -176,9 +230,161 @@ size_t pokedex_layout_clip_desc(const char *src, char *dst, size_t dst_cap,
         dst[limit] = '\0';
         return limit;
     }
-    memcpy(dst, src, limit - 3);
-    memcpy(dst + (limit - 3), "...", 4);
-    return limit;
+    {
+        size_t cut = limit - 3;
+        while (cut > 0 && ((unsigned char)src[cut] & 0xC0) == 0x80) cut--;
+        memcpy(dst, src, cut);
+        memcpy(dst + cut, "...", 4);
+        return cut + 3;
+    }
+}
+
+const char *pokedex_layout_roman_gen(uint32_t gen)
+{
+    static const char *roman[] = {
+        "", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX",
+    };
+    if (gen < 1 || gen > 9) return "";
+    return roman[gen];
+}
+
+int pokedex_layout_type_label(const char *type_name, pokedex_lang_t lang,
+                              char *buf, size_t cap)
+{
+    static const struct {
+        const char *name;
+        const char *zh;
+    } table[] = {
+        {"bug", "虫"},
+        {"dark", "恶"},
+        {"dragon", "龙"},
+        {"electric", "电"},
+        {"fairy", "妖精"},
+        {"fighting", "格斗"},
+        {"fire", "火"},
+        {"flying", "飞行"},
+        {"ghost", "幽灵"},
+        {"grass", "草"},
+        {"ground", "地面"},
+        {"ice", "冰"},
+        {"normal", "一般"},
+        {"poison", "毒"},
+        {"psychic", "超能"},
+        {"rock", "岩石"},
+        {"steel", "钢"},
+        {"water", "水"},
+    };
+
+    if (lang != POKEDEX_LANG_ZH) {
+        return pokedex_layout_type_abbr(type_name, buf, cap);
+    }
+    if (!buf || cap < 7) return 0;
+    buf[0] = '\0';
+    if (!type_name || !type_name[0]) return 0;
+    for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); i++) {
+        if (strcmp(type_name, table[i].name) == 0) {
+            return snprintf(buf, cap, "%s", table[i].zh);
+        }
+    }
+    return 0;
+}
+
+int pokedex_layout_format_title(pokedex_lang_t lang, char *buf, size_t cap)
+{
+    if (!buf || !cap) return 0;
+    return snprintf(buf, cap, "%s", lang == POKEDEX_LANG_ZH ? "图鉴" : "POKEDEX");
+}
+
+int pokedex_layout_format_list_progress(uint32_t id, char *buf, size_t cap)
+{
+    uint32_t g;
+    uint32_t first;
+    uint32_t last;
+    uint32_t idx;
+
+    if (!buf || !cap) return 0;
+    g = pokedex_generation(id);
+    first = pokedex_gen_first(id);
+    last = pokedex_gen_last(id);
+    if (g == 0 || first == 0 || last == 0) {
+        return snprintf(buf, cap, "--");
+    }
+    idx = id - first + 1u;
+    return snprintf(buf, cap, "%s %03u/%u",
+                    pokedex_layout_roman_gen(g),
+                    (unsigned)idx, (unsigned)(last - first + 1u));
+}
+
+int pokedex_layout_format_seen_lang(uint32_t n, pokedex_lang_t lang,
+                                    char *buf, size_t cap)
+{
+    if (!buf || !cap) return 0;
+    if (lang == POKEDEX_LANG_ZH) {
+        return snprintf(buf, cap, "已见 %u", (unsigned)n);
+    }
+    return pokedex_layout_format_seen(n, buf, cap);
+}
+
+int pokedex_layout_format_stats_lang(int height_dm, int weight_hg,
+                                     pokedex_lang_t lang,
+                                     char *buf, size_t cap)
+{
+    char h[16];
+    char w[16];
+
+    if (!buf || !cap) return 0;
+    pokedex_format_height(height_dm, h, sizeof(h));
+    pokedex_format_weight(weight_hg, w, sizeof(w));
+    if (lang == POKEDEX_LANG_ZH) {
+        return snprintf(buf, cap, "身高 %s    体重 %s", h, w);
+    }
+    return snprintf(buf, cap, "HT %s    WT %s", h, w);
+}
+
+int pokedex_layout_format_gen_line(uint32_t gen, pokedex_lang_t lang,
+                                   char *buf, size_t cap)
+{
+    uint32_t first;
+    uint32_t last;
+
+    if (!buf || !cap) return 0;
+    first = pokedex_gen_first_n(gen);
+    last = pokedex_gen_last_n(gen);
+    if (first == 0 || last == 0) {
+        buf[0] = '\0';
+        return 0;
+    }
+    if (lang == POKEDEX_LANG_ZH) {
+        return snprintf(buf, cap, "第%u世代  %u-%u",
+                        (unsigned)gen, (unsigned)first, (unsigned)last);
+    }
+    return snprintf(buf, cap, "%-5s %u-%u",
+                    pokedex_layout_roman_gen(gen),
+                    (unsigned)first, (unsigned)last);
+}
+
+int pokedex_layout_format_jump_item(pokedex_lang_t lang, char *buf, size_t cap)
+{
+    if (!buf || !cap) return 0;
+    return snprintf(buf, cap, "%s",
+                    lang == POKEDEX_LANG_ZH ? "跳到编号" : "GO TO #");
+}
+
+int pokedex_layout_format_name_item(pokedex_lang_t lang, char *buf, size_t cap)
+{
+    if (!buf || !cap) return 0;
+    return snprintf(buf, cap, "%s",
+                    lang == POKEDEX_LANG_ZH ? "按字母" : "A-Z NAME");
+}
+
+int pokedex_layout_format_letter_line(char letter, uint32_t id, const char *name,
+                                      char *buf, size_t cap)
+{
+    if (!buf || !cap) return 0;
+    if (!name) name = "";
+    if (letter < 'A' || letter > 'Z') letter = '?';
+    return snprintf(buf, cap, "%c  #%03u  %s",
+                    letter, (unsigned)id, name);
 }
 
 bool pokedex_layout_scale2x_rgb565(const uint16_t *src, uint32_t w, uint32_t h,

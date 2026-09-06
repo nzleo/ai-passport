@@ -23,6 +23,7 @@
 // 已知边界:若截帧窗口内恰好出现"整宽且起点等于下一条带 y1"的局部刷新,
 // 帧流会错位(产物花屏,肉眼可辨),重新截一次即可;发布流程会人工检查截图。
 #include "screenshot.h"
+#include "demo.h"
 
 #include "bsp_display.h"
 #include "bsp_pins.h"
@@ -43,7 +44,7 @@
 static const char *TAG = "screenshot";
 
 #define SCREENSHOT_CMD       "FAP_SCREENSHOT_V1"
-#define SCREENSHOT_LINE_MAX  40    // 命令行缓冲上限,超长行整行丢弃
+#define SCREENSHOT_LINE_MAX  64    // 命令行缓冲上限,超长行整行丢弃
 #define SCREENSHOT_STACK     7168  // 与 LVGL port 任务同规格:截帧时在本任务栈上跑 lv_timer_handler
 #define SCREENSHOT_PRIO      3     // 低于 LVGL port(4)与叫声任务(5):UI 与音频永远优先
 #define SCREENSHOT_BAND_MAX  500   // 截帧总超时:500 轮 × 2ms ≈ 1s,防条带永远不到时卡死
@@ -151,9 +152,15 @@ static void screenshot_task(void *arg)
                 if (len == sizeof(SCREENSHOT_CMD) - 1 &&
                     memcmp(line, SCREENSHOT_CMD, len) == 0) {
                     screenshot_run();
+                } else if (len > 12 && memcmp(line, "FAP_POKEDEX_", 12) == 0) {
+                    line[len] = '\0';
+                    if (bsp_lvgl_lock(500)) {
+                        demo_pokedex_debug_line(line);
+                        bsp_lvgl_unlock();
+                    }
                 }
                 len = 0;
-            } else if (len < sizeof(line)) {
+            } else if (len + 1 < sizeof(line)) {
                 line[len++] = (char)ch;
             } else {
                 len = 0;   // 超长行:丢弃重来,防止缓冲被无关输入填满

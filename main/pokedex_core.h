@@ -64,8 +64,44 @@ uint32_t pokedex_step(uint32_t id, int32_t delta);
 uint32_t pokedex_generation(uint32_t id);
 // 该世代全国图鉴起始编号;越界 id 返回 0。
 uint32_t pokedex_gen_first(uint32_t id);
+// 该世代全国图鉴结束编号;越界 id 返回 0。
+uint32_t pokedex_gen_last(uint32_t id);
+// 按世代号(1..9)取起止;越界返回 0。
+uint32_t pokedex_gen_first_n(uint32_t gen);
+uint32_t pokedex_gen_last_n(uint32_t gen);
 // 跳到相邻世代的第一只并回绕(长按 UP/DOWN)。dir<0 上一代,dir>0 下一代。
 uint32_t pokedex_step_gen(uint32_t id, int32_t dir);
+// 在当前世代内步进并回绕,不跨世代。
+uint32_t pokedex_step_in_gen(uint32_t id, int32_t delta);
+// 列表窗口:同一世代内取 rows 条,尽量让 id 落在窗口前方(约第 3 行)。
+uint32_t pokedex_list_window_first(uint32_t id, uint32_t rows);
+// 任意闭区间 [first,last] 的同样窗口规则;id 会钳到区间内。
+uint32_t pokedex_window_first(uint32_t id, uint32_t first, uint32_t last,
+                              uint32_t rows);
+
+// 查找页:第 0 项=跳号,第 1 项=按字母,第 2..10 项=世代 1..9。
+#define POKEDEX_FIND_COUNT 11u
+#define POKEDEX_FIND_JUMP  0u
+#define POKEDEX_FIND_NAME  1u
+uint32_t pokedex_find_step(uint32_t sel, int32_t delta);
+uint32_t pokedex_find_sel_for_id(uint32_t id);
+// 查找项 → 世代号;跳号/按字母项返回 0。
+uint32_t pokedex_find_sel_to_gen(uint32_t sel);
+
+// 英文种名首字母(A-Z);没有拉丁字母时返回 '?'。
+char pokedex_en_initial(const char *raw);
+// 在 [first,last] 内按 key_of(id) 跳到下一/上一组的第一只;dir<0 上一组。
+// 全员同一 key 时返回原 id。key_of 不得为 NULL。
+uint32_t pokedex_step_key_in_range(uint32_t id, int32_t dir,
+                                   uint32_t first, uint32_t last,
+                                   uint32_t (*key_of)(uint32_t));
+
+// 四位跳号(0001..1025)。0000 钳到 1,大于 1025 钳到 1025。
+uint32_t pokedex_jump_clamp(uint32_t n);
+void     pokedex_jump_to_digits(uint32_t n, uint8_t d[4]);
+uint32_t pokedex_jump_from_digits(const uint8_t d[4]);
+uint32_t pokedex_jump_nudge_digit(uint32_t n, unsigned pos, int32_t dir);
+unsigned pokedex_jump_cursor_move(unsigned pos, int32_t dir);
 
 // 序列化/反序列化。serialize 保证写入 POKEDEX_STATE_BLOB_SIZE 字节;
 // deserialize 接受 v2(272B)或 v1(52B,迁到 v2);非法数据返回 false 且不改动 st。

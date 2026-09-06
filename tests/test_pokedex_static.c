@@ -52,12 +52,19 @@ static void test_dex_table(void)
         CHECK(strlen(e->name) < sizeof(e->name));
         CHECK(e->desc[0] != '\0');
         CHECK(strlen(e->desc) < sizeof(e->desc));
-        /* LVGL 内置字体无扩展字形:描述必须是纯 ASCII。 */
+        /* 英文描述必须是纯 ASCII;中文名/概述走子集字体。 */
         for (const char *c = e->desc; *c; c++) {
             CHECK((unsigned char)*c < 0x80);
         }
+        CHECK(e->name_zh[0] != '\0');
+        CHECK(strlen(e->name_zh) < sizeof(e->name_zh));
+        CHECK(e->desc_zh[0] != '\0');
+        CHECK(strlen(e->desc_zh) < sizeof(e->desc_zh));
     }
     /* 抽查已知事实(防生成脚本漂移)。 */
+    CHECK(strcmp(pokedex_static_dex[1].name_zh, "妙蛙种子") == 0);
+    CHECK(strcmp(pokedex_static_dex[25].name_zh, "皮卡丘") == 0);
+    CHECK(strcmp(pokedex_static_dex[151].name_zh, "梦幻") == 0);
     CHECK(strcmp(pokedex_static_dex[1].name, "bulbasaur") == 0);
     CHECK(pokedex_static_dex[1].height_dm == 7);
     CHECK(pokedex_static_dex[1].weight_hg == 69);

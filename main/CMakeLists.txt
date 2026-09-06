@@ -11,6 +11,7 @@ idf_component_register(
          "demo_ble.c"
          "demo_low_power.c"
          "demo_pokedex.c"
+         "chinese_14.c"
          "screenshot.c"
          "pokedex_layout.c"
          "pokedex_static.c"
