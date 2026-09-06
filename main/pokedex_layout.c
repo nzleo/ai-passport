@@ -11,9 +11,9 @@ void pokedex_layout_build(pokedex_layout_t *out)
     if (!out) return;
     memset(out, 0, sizeof(*out));
 
-    /* 240x320 手持图鉴:顶栏身份,顶栏下居中 144px 精灵井(48px 3x)。
-       左上编号+属性、右上名字、左下身高、右下体重叠在立绘四角,
-       腾出的下半屏给概述(约 6 行),底栏见过与按键提示。 */
+    /* 240x320 手持图鉴:顶栏下立绘区与概述约 2/3 : 1/3。
+       立绘 144px(48px 3x,官方画布比例,不裁切)。
+       顶边左编号 / 中名字 / 右属性(双属性纵向叠),底边左身高 / 右体重。 */
     out->screen      = (pokedex_rect_t){0, 0, 240, 320};
     out->header      = (pokedex_rect_t){0, 0, 240, 22};
     out->header_rule = (pokedex_rect_t){0, 22, 240, 2};
@@ -21,28 +21,29 @@ void pokedex_layout_build(pokedex_layout_t *out)
     out->progress    = (pokedex_rect_t){74, 4, 100, 16}; /* "1025/1025" 粗体 */
     out->battery     = (pokedex_rect_t){178, 4, 54, 16};
 
-    out->sprite_frame = (pokedex_rect_t){8, 26, 224, 148};
-    out->sprite_inner = (pokedex_rect_t){10, 28, 220, 144};
-    out->sprite       = (pokedex_rect_t){48, 28, 144, 144};
+    out->sprite_frame = (pokedex_rect_t){8, 26, 224, 164};
+    out->sprite_inner = (pokedex_rect_t){10, 28, 220, 160};
+    out->sprite       = (pokedex_rect_t){48, 36, 144, 144};
 
-    out->number_chip = (pokedex_rect_t){10, 28, 80, 16};
-    out->number      = (pokedex_rect_t){12, 29, 76, 14};
-    out->badge[0]    = (pokedex_rect_t){10, 46, POKEDEX_LAYOUT_BADGE_W,
+    out->number_chip = (pokedex_rect_t){10, 28, 88, 16};
+    out->number      = (pokedex_rect_t){12, 29, 84, 14};
+
+    out->name_chip = (pokedex_rect_t){100, 28, 82, 16};
+    out->name      = (pokedex_rect_t){102, 29, 78, 14};
+
+    out->badge[0]    = (pokedex_rect_t){186, 28, POKEDEX_LAYOUT_BADGE_W,
                                         POKEDEX_LAYOUT_BADGE_H};
-    out->badge[1]    = (pokedex_rect_t){56, 46, POKEDEX_LAYOUT_BADGE_W,
+    out->badge[1]    = (pokedex_rect_t){186, 46, POKEDEX_LAYOUT_BADGE_W,
                                         POKEDEX_LAYOUT_BADGE_H};
 
-    out->name_chip = (pokedex_rect_t){118, 28, 112, 16};
-    out->name      = (pokedex_rect_t){120, 29, 108, 14};
+    out->height      = (pokedex_rect_t){10, 170, 104, 18};
+    out->height_text = (pokedex_rect_t){12, 171, 100, 16};
+    out->weight      = (pokedex_rect_t){126, 170, 104, 18};
+    out->weight_text = (pokedex_rect_t){128, 171, 100, 16};
 
-    out->height      = (pokedex_rect_t){10, 152, 104, 18};
-    out->height_text = (pokedex_rect_t){12, 153, 100, 16};
-    out->weight      = (pokedex_rect_t){126, 152, 104, 18};
-    out->weight_text = (pokedex_rect_t){128, 153, 100, 16};
-
-    out->flavor_frame = (pokedex_rect_t){8, 176, 224, 96};
-    out->flavor_inner = (pokedex_rect_t){10, 177, 220, 94};
-    out->flavor_text  = (pokedex_rect_t){14, 179, 212, 90};
+    out->flavor_frame = (pokedex_rect_t){8, 192, 224, 80};
+    out->flavor_inner = (pokedex_rect_t){10, 193, 220, 78};
+    out->flavor_text  = (pokedex_rect_t){14, 195, 212, 74};
 
     out->tally_seen   = (pokedex_rect_t){8, 274, 224, 14};
     out->hint         = (pokedex_rect_t){8, 290, 224, 30};

@@ -1,8 +1,8 @@
 // main/pokedex_layout.h —— 掌上图鉴 240x320 布局几何。
 // 纯 C,不依赖 ESP-IDF/LVGL,可在宿主机单测(tests/test_pokedex_layout.c)。
-// 详情页把 144px 精灵井放到顶栏下方居中;编号+属性、名字、身高、体重叠在
-// 立绘四角,腾出的下半屏给概述。概述超出视口时由 flavor_scroll 往返慢滚。
-// 四角花牌落在精灵框内且互不相交;概述与底栏不相交。
+// 详情页立绘按官方 48px 画布最近邻 3x(144px)居中,不裁切硬撑。
+// 立绘区与概述约 2/3 : 1/3。顶边左编号、中名字、右属性;底边左身高、右体重。
+// 概述超出视口时由 flavor_scroll 往返慢滚。顶底花牌落在精灵框内且互不相交。
 #pragma once
 
 #include <stdbool.h>
@@ -11,7 +11,7 @@
 
 #define POKEDEX_LAYOUT_W            240
 #define POKEDEX_LAYOUT_H            320
-#define POKEDEX_LAYOUT_SPRITE_PX    144  /* 48px 像素图最近邻 3x */
+#define POKEDEX_LAYOUT_SPRITE_PX    144  /* 48px 像素图最近邻 3x(相对 2x 再 ×1.5) */
 #define POKEDEX_LAYOUT_SPRITE_SCALE 3u
 #define POKEDEX_LAYOUT_BADGE_W      44   /* 3 字母 / 2 汉字属性芯片 */
 #define POKEDEX_LAYOUT_BADGE_H      16

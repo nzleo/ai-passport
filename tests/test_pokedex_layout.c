@@ -75,9 +75,13 @@ static void test_bounds_and_nesting(void)
     CHECK(L.sprite.w == POKEDEX_LAYOUT_SPRITE_PX);
     CHECK(L.sprite.h == POKEDEX_LAYOUT_SPRITE_PX);
     CHECK(L.sprite.w == 144);
-    CHECK(L.name.w >= 100); /* 右上角放下 WALKING WAKE */
+    CHECK(L.name.w >= 72); /* 顶边居中,夹在编号与属性之间 */
     CHECK(L.name.h >= 14);
-    CHECK(L.flavor_text.h >= 80); /* 四角叠立绘后概述约 6 行 */
+    CHECK(L.number_chip.w >= 80); /* NO.1025 */
+    CHECK(L.name.x > L.number_chip.x + L.number_chip.w);
+    CHECK(L.name.x + L.name.w < L.badge[0].x);
+    CHECK(L.flavor_text.h >= 56); /* 下 1/3 概述约 3–4 行 */
+    CHECK(L.sprite_frame.h >= L.flavor_frame.h * 2); /* 约 2/3 : 1/3 */
 }
 
 static void test_no_sibling_overlap(void)
