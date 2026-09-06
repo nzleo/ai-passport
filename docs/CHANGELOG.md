@@ -6,6 +6,14 @@
 
 ## Unreleased
 
+- Pokédex detail now uses a 144×144 sprite well under the header. The
+  48×48 sprite is cropped to its painted pixels and nearest-neighbor
+  scaled to fill that well, so the Pokémon is no longer a small tile in
+  a large empty frame.
+  The 14 px Chinese subset is regenerated from Hiragino Sans GB W6 with a
+  light outline embolden so strokes stay solid on the dark dex screen;
+  ASCII lives in the same face so digits no longer fall back to thin
+  Montserrat.
 - Pokédex browsing is now a list plus a Find hub: the page opens on a
   generation list (click ±1, double-click jumps to the next English-initial
   group, long-press UP/DOWN opens Find). Find lists jump-to-number, an A–Z

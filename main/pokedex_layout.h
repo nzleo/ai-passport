@@ -1,19 +1,20 @@
 // main/pokedex_layout.h —— 掌上图鉴 240x320 布局几何。
 // 纯 C,不依赖 ESP-IDF/LVGL,可在宿主机单测(tests/test_pokedex_layout.c)。
-// 页面把精灵井放到右上、身份信息放到左列,底部给概述和见过计数;所有矩形必须落在
-// 屏内且兄弟区域不相交。名字折行限制在左列 120px 内,不得画进精灵井。
+// 详情页把 144px 精灵井放到顶栏下方居中,编号/名字/属性跟在立绘下面,底部给
+// 概述和见过计数。所有矩形必须落在屏内且兄弟区域不相交。
 #pragma once
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
-#define POKEDEX_LAYOUT_W          240
-#define POKEDEX_LAYOUT_H          320
-#define POKEDEX_LAYOUT_SPRITE_PX  96   /* 48px 像素图最近邻 2x */
-#define POKEDEX_LAYOUT_BADGE_W    44   /* 3 字母 / 2 汉字属性芯片 */
-#define POKEDEX_LAYOUT_BADGE_H    18
-#define POKEDEX_LAYOUT_DESC_MAX   130  /* 概述约 5 行,Montserrat 14 */
+#define POKEDEX_LAYOUT_W            240
+#define POKEDEX_LAYOUT_H            320
+#define POKEDEX_LAYOUT_SPRITE_PX    144  /* 48px 像素图最近邻 3x */
+#define POKEDEX_LAYOUT_SPRITE_SCALE 3u
+#define POKEDEX_LAYOUT_BADGE_W      44   /* 3 字母 / 2 汉字属性芯片 */
+#define POKEDEX_LAYOUT_BADGE_H      18
+#define POKEDEX_LAYOUT_DESC_MAX     90   /* 概述约 2–3 行,14px */
 #define POKEDEX_LIST_ROWS         7
 
 typedef enum {
@@ -123,8 +124,21 @@ int pokedex_layout_format_letter_line(char letter, uint32_t id, const char *name
 size_t pokedex_layout_clip_desc(const char *src, char *dst, size_t dst_cap,
                                 size_t max_chars);
 
-// 最近邻 2x 放大 RGB565。允许 src 与 dst 为同一缓冲(从后往前写)。
-// 输出尺寸为 (w*2,h*2);缓冲不足或 w/h 为 0 返回 false。
+// 去掉等于 bg 的透明边后再最近邻放大,居中铺进 dw×dh(先填 bg)。
+// src 与 dst 不得重叠。找不到非背景像素时退回整幅图。
+bool pokedex_layout_fit_sprite_rgb565(const uint16_t *src, uint32_t w, uint32_t h,
+                                      uint16_t bg, uint16_t *dst,
+                                      uint32_t dw, uint32_t dh,
+                                      size_t dst_cap_u16);
+
+// 最近邻整数倍放大 RGB565。允许 src 与 dst 为同一缓冲(从后往前写)。
+// 输出尺寸为 (w*factor,h*factor);factor==0、缓冲不足或 w/h 为 0 返回 false。
+bool pokedex_layout_scale_nn_rgb565(const uint16_t *src, uint32_t w, uint32_t h,
+                                    uint32_t factor, uint16_t *dst,
+                                    size_t dst_cap_u16,
+                                    uint32_t *out_w, uint32_t *out_h);
+
+// scale_nn(..., 2, ...) 的别名,保留给既有测试。
 bool pokedex_layout_scale2x_rgb565(const uint16_t *src, uint32_t w, uint32_t h,
                                    uint16_t *dst, size_t dst_cap_u16,
                                    uint32_t *out_w, uint32_t *out_h);

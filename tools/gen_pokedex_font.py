@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """从中文图鉴文案生成 LVGL 9 的 14px 4bpp 子集字体(chinese_14)。
 
-只收录 CJK / 全角标点;ASCII 走 lv_font_montserrat_14 fallback。
-默认字体:macOS Hiragino Sans GB。
+收录 CJK / 全角标点以及 ASCII(数字与英文界面),避免回落到偏细的
+Montserrat。默认字体:macOS Hiragino Sans GB W6,并做轻微轮廓加粗,
+让 240x320 屏上的白字不发虚。
 """
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ import argparse
 import os
 import re
 import sys
+from ctypes import byref
 
 OUT_C = "main/chinese_14.c"
 OUT_H = "main/chinese_14.h"
@@ -17,6 +19,7 @@ STATIC_C = "main/pokedex_static.c"
 
 UI_CHARS = (
     "图鉴查找跳号跳到编号输入编号已见身高体重确定打开叫声选择返回"
+    "暂无图像"
     "长按双击中英世代上下改位按字母母"
     "虫恶龙电妖精格斗火飞行幽灵草地面冰一般毒超能岩石钢水"
     "第"
@@ -28,7 +31,7 @@ RE_QUOTED = re.compile(r'"((?:\\.|[^"\\])*)"')
 
 
 def collect_chars(static_c: str) -> list[int]:
-    cps: set[int] = set()
+    cps: set[int] = set(range(0x20, 0x7F))  # ASCII,含数字与英文界面
     for ch in UI_CHARS:
         o = ord(ch)
         if o >= 0x80:
@@ -57,14 +60,43 @@ def pack_a4(gray: list[int], w: int, h: int) -> bytes:
     return bytes(out)
 
 
-def render_glyphs(font_path: str, face_index: int, cps: list[int], px: int):
+def boost_coverage(buf: list[int], gamma: float) -> list[int]:
+    if gamma == 1.0 or not buf:
+        return buf
+    out = []
+    for g in buf:
+        v = (g / 255.0) ** gamma
+        out.append(min(255, int(v * 255.0 + 0.5)))
+    return out
+
+
+def render_glyphs(
+    font_path: str,
+    face_index: int,
+    cps: list[int],
+    px: int,
+    embolden: int,
+    gamma: float,
+):
     try:
-        from freetype import Face, FT_LOAD_RENDER, FT_LOAD_TARGET_NORMAL
+        from freetype import (
+            Face,
+            FT_GLYPH_FORMAT_OUTLINE,
+            FT_LOAD_DEFAULT,
+            FT_LOAD_NO_BITMAP,
+            FT_LOAD_TARGET_NORMAL,
+            FT_Outline_Embolden,
+            FT_RENDER_MODE_NORMAL,
+        )
     except ImportError as e:
         raise SystemExit(f"需要 freetype-py: pip install freetype-py ({e})") from e
 
     face = Face(font_path, index=face_index)
     face.set_char_size(px * 64)
+    asc = int(round(face.size.ascender / 64.0))
+    desc = int(round(-face.size.descender / 64.0))
+    line_height = max(px + 2, asc + desc)
+    base_line = max(2, desc)
 
     glyphs = []
     bitmaps = bytearray()
@@ -72,13 +104,22 @@ def render_glyphs(font_path: str, face_index: int, cps: list[int], px: int):
     dsc = [dict(bitmap_index=0, adv_w=0, box_w=0, box_h=0, ofs_x=0, ofs_y=0)]
 
     for cp in cps:
-        face.load_char(chr(cp), FT_LOAD_RENDER | FT_LOAD_TARGET_NORMAL)
+        face.load_char(
+            chr(cp),
+            FT_LOAD_DEFAULT | FT_LOAD_NO_BITMAP | FT_LOAD_TARGET_NORMAL,
+        )
+        if embolden > 0 and face.glyph.format == FT_GLYPH_FORMAT_OUTLINE:
+            FT_Outline_Embolden(byref(face.glyph.outline._FT_Outline), embolden)
+        face.glyph.render(FT_RENDER_MODE_NORMAL)
         slot = face.glyph
         bmp = slot.bitmap
         w, h = bmp.width, bmp.rows
         buf = list(bmp.buffer) if w and h else []
+        buf = boost_coverage(buf, gamma)
         packed = pack_a4(buf, w, h) if buf else b""
         adv = max(0, slot.advance.x // 4)  # 26.6 → 8.4
+        if embolden > 0:
+            adv += embolden // 4
         if adv > 4095:
             adv = 4095
         dsc.append(
@@ -94,7 +135,7 @@ def render_glyphs(font_path: str, face_index: int, cps: list[int], px: int):
         bitmaps.extend(packed)
         glyphs.append(cp)
 
-    return glyphs, dsc, bytes(bitmaps)
+    return glyphs, dsc, bytes(bitmaps), line_height, base_line
 
 
 def c_bytes(data: bytes, per_line: int = 12) -> str:
@@ -105,7 +146,15 @@ def c_bytes(data: bytes, per_line: int = 12) -> str:
     return "\n".join(parts)
 
 
-def write_font(out_c: str, out_h: str, glyphs: list[int], dsc, bitmap: bytes) -> None:
+def write_font(
+    out_c: str,
+    out_h: str,
+    glyphs: list[int],
+    dsc,
+    bitmap: bytes,
+    line_height: int,
+    base_line: int,
+) -> None:
     if not glyphs:
         raise SystemExit("没有可生成的中文字形")
 
@@ -168,8 +217,8 @@ def write_font(out_c: str, out_h: str, glyphs: list[int], dsc, bitmap: bytes) ->
         "const lv_font_t chinese_14 = {",
         "    .get_glyph_dsc = lv_font_get_glyph_dsc_fmt_txt,",
         "    .get_glyph_bitmap = lv_font_get_bitmap_fmt_txt,",
-        "    .line_height = 16,",
-        "    .base_line = 3,",
+        f"    .line_height = {line_height},",
+        f"    .base_line = {base_line},",
         "    .subpx = LV_FONT_SUBPX_NONE,",
         "    .underline_position = -1,",
         "    .underline_thickness = 1,",
@@ -195,18 +244,33 @@ def write_font(out_c: str, out_h: str, glyphs: list[int], dsc, bitmap: bytes) ->
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--font", default="/System/Library/Fonts/Hiragino Sans GB.ttc")
-    ap.add_argument("--face", type=int, default=0)
+    ap.add_argument("--face", type=int, default=2, help="Hiragino Sans GB W6")
     ap.add_argument("--size", type=int, default=14)
+    ap.add_argument(
+        "--embolden",
+        type=int,
+        default=48,
+        help="FreeType 轮廓加粗,单位 26.6(48≈0.75px)",
+    )
+    ap.add_argument(
+        "--gamma",
+        type=float,
+        default=0.55,
+        help="覆盖率伽马<1 让浅灰更实,减轻发虚",
+    )
     ap.add_argument("--static-c", default=STATIC_C)
     ap.add_argument("-o", default=OUT_C)
     ap.add_argument("--header", default=OUT_H)
     args = ap.parse_args()
 
     cps = collect_chars(args.static_c)
-    print(f"中文字形 {len(cps)} 个,字体 {args.font}")
-    glyphs, dsc, bitmap = render_glyphs(args.font, args.face, cps, args.size)
-    write_font(args.o, args.header, glyphs, dsc, bitmap)
+    print(f"字形 {len(cps)} 个,字体 {args.font} face {args.face}")
+    glyphs, dsc, bitmap, line_height, base_line = render_glyphs(
+        args.font, args.face, cps, args.size, args.embolden, args.gamma
+    )
+    write_font(args.o, args.header, glyphs, dsc, bitmap, line_height, base_line)
     print(f"  {args.o}: bitmap {len(bitmap)} B, glyphs {len(glyphs)}")
+    print(f"  line_height {line_height} base_line {base_line}")
     print(f"  {args.header}")
 
 

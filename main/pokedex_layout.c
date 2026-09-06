@@ -2,6 +2,7 @@
 #include "pokedex_layout.h"
 #include "pokedex_core.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -10,39 +11,37 @@ void pokedex_layout_build(pokedex_layout_t *out)
     if (!out) return;
     memset(out, 0, sizeof(*out));
 
-    /* 240x320 手持图鉴:顶栏身份,右上 96px 精灵井,左列编号/两行名/属性,
-       中部身高体重条,下部概述,底栏见过计数与按键提示。矩形之间留 4px 缝,
-       左列右缘 128、精灵井左缘 132。名字用 14px 折行,最长种名
-       (SQUAWKABILLY / WALKING WAKE)不得画进精灵井。 */
+    /* 240x320 手持图鉴:顶栏身份,顶栏下居中 144px 精灵井(48px 3x),
+       立绘下方编号/名字/属性/身高体重,再下面概述,底栏见过与按键提示。
+       名字与编号同一行,224px 宽够放下 SQUAWKABILLY / WALKING WAKE。 */
     out->screen      = (pokedex_rect_t){0, 0, 240, 320};
     out->header      = (pokedex_rect_t){0, 0, 240, 22};
     out->header_rule = (pokedex_rect_t){0, 22, 240, 2};
-    out->title       = (pokedex_rect_t){8, 4, 80, 16};  /* "POKEDEX" 14px 要约 78px */
-    out->progress    = (pokedex_rect_t){90, 4, 84, 16}; /* "1025/1025" */
+    out->title       = (pokedex_rect_t){8, 4, 64, 16};  /* "图鉴" / "POKEDEX" */
+    out->progress    = (pokedex_rect_t){74, 4, 100, 16}; /* "1025/1025" 粗体 */
     out->battery     = (pokedex_rect_t){178, 4, 54, 16};
 
-    out->sprite_frame = (pokedex_rect_t){132, 28, 100, 100};
-    out->sprite_inner = (pokedex_rect_t){134, 30, 96, 96};
-    out->sprite       = (pokedex_rect_t){134, 30, 96, 96};
+    out->sprite_frame = (pokedex_rect_t){8, 26, 224, 148};
+    out->sprite_inner = (pokedex_rect_t){10, 28, 220, 144};
+    out->sprite       = (pokedex_rect_t){48, 28, 144, 144};
 
-    out->number_chip = (pokedex_rect_t){8, 30, 116, 18};
-    out->number      = (pokedex_rect_t){12, 32, 108, 14};
-    /* 14px 两行:左列 120px 够放下 12 字母种名,不与精灵井相交。 */
-    out->name        = (pokedex_rect_t){8, 52, 120, 36};
-    out->badge[0]    = (pokedex_rect_t){8, 92, POKEDEX_LAYOUT_BADGE_W,
+    out->number_chip = (pokedex_rect_t){8, 178, 86, 18};
+    out->number      = (pokedex_rect_t){12, 180, 78, 14};
+    out->name        = (pokedex_rect_t){98, 176, 134, 20};
+    out->badge[0]    = (pokedex_rect_t){8, 198, POKEDEX_LAYOUT_BADGE_W,
                                         POKEDEX_LAYOUT_BADGE_H};
-    out->badge[1]    = (pokedex_rect_t){58, 92, POKEDEX_LAYOUT_BADGE_W,
+    out->badge[1]    = (pokedex_rect_t){56, 198, POKEDEX_LAYOUT_BADGE_W,
                                         POKEDEX_LAYOUT_BADGE_H};
 
-    out->stats      = (pokedex_rect_t){8, 134, 224, 22};
-    out->stats_text = (pokedex_rect_t){8, 137, 224, 16};
+    out->stats      = (pokedex_rect_t){8, 220, 224, 18};
+    out->stats_text = (pokedex_rect_t){8, 221, 224, 16};
 
-    out->flavor_frame = (pokedex_rect_t){8, 160, 224, 108};
-    out->flavor_inner = (pokedex_rect_t){10, 162, 220, 104};
-    out->flavor_text  = (pokedex_rect_t){14, 166, 212, 96};
+    out->flavor_frame = (pokedex_rect_t){8, 240, 224, 34};
+    out->flavor_inner = (pokedex_rect_t){10, 241, 220, 32};
+    out->flavor_text  = (pokedex_rect_t){14, 242, 212, 30};
 
-    out->tally_seen   = (pokedex_rect_t){8, 270, 224, 16};
-    out->hint         = (pokedex_rect_t){8, 288, 224, 32};
+    out->tally_seen   = (pokedex_rect_t){8, 276, 224, 14};
+    out->hint         = (pokedex_rect_t){8, 290, 224, 30};
 }
 
 void pokedex_list_layout_build(pokedex_list_layout_t *out)
@@ -336,9 +335,9 @@ int pokedex_layout_format_stats_lang(int height_dm, int weight_hg,
     pokedex_format_height(height_dm, h, sizeof(h));
     pokedex_format_weight(weight_hg, w, sizeof(w));
     if (lang == POKEDEX_LANG_ZH) {
-        return snprintf(buf, cap, "身高 %s    体重 %s", h, w);
+        return snprintf(buf, cap, "身高 %s   体重 %s", h, w);
     }
-    return snprintf(buf, cap, "HT %s    WT %s", h, w);
+    return snprintf(buf, cap, "HT %s   WT %s", h, w);
 }
 
 int pokedex_layout_format_gen_line(uint32_t gen, pokedex_lang_t lang,
@@ -387,35 +386,105 @@ int pokedex_layout_format_letter_line(char letter, uint32_t id, const char *name
                     letter, (unsigned)id, name);
 }
 
-bool pokedex_layout_scale2x_rgb565(const uint16_t *src, uint32_t w, uint32_t h,
-                                   uint16_t *dst, size_t dst_cap_u16,
-                                   uint32_t *out_w, uint32_t *out_h)
+bool pokedex_layout_fit_sprite_rgb565(const uint16_t *src, uint32_t w, uint32_t h,
+                                      uint16_t bg, uint16_t *dst,
+                                      uint32_t dw, uint32_t dh,
+                                      size_t dst_cap_u16)
+{
+    uint32_t min_x = w, min_y = h, max_x = 0, max_y = 0;
+    uint32_t y, x, fy, fx, bw, bh, factor, ox, oy, i;
+
+    if (!src || !dst || w == 0 || h == 0 || dw == 0 || dh == 0) return false;
+    if ((uint64_t)dw * dh > dst_cap_u16) return false;
+    if (src == dst) return false;
+
+    for (y = 0; y < h; y++) {
+        for (x = 0; x < w; x++) {
+            if (src[y * w + x] == bg) continue;
+            if (x < min_x) min_x = x;
+            if (y < min_y) min_y = y;
+            if (x > max_x) max_x = x;
+            if (y > max_y) max_y = y;
+        }
+    }
+    if (min_x > max_x || min_y > max_y) {
+        min_x = 0;
+        min_y = 0;
+        max_x = w - 1;
+        max_y = h - 1;
+    }
+    bw = max_x - min_x + 1;
+    bh = max_y - min_y + 1;
+    factor = dw / bw;
+    if (dh / bh < factor) factor = dh / bh;
+    if (factor == 0) factor = 1;
+    if (factor > 8u) factor = 8u;
+
+    for (i = 0; i < dw * dh; i++) dst[i] = bg;
+    ox = (dw - bw * factor) / 2u;
+    oy = (dh - bh * factor) / 2u;
+    for (y = 0; y < bh; y++) {
+        for (x = 0; x < bw; x++) {
+            uint16_t px = src[(min_y + y) * w + (min_x + x)];
+            uint32_t dx0 = ox + x * factor;
+            uint32_t dy0 = oy + y * factor;
+            for (fy = 0; fy < factor; fy++) {
+                uint32_t row = (dy0 + fy) * dw + dx0;
+                for (fx = 0; fx < factor; fx++) {
+                    dst[row + fx] = px;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+bool pokedex_layout_scale_nn_rgb565(const uint16_t *src, uint32_t w, uint32_t h,
+                                    uint32_t factor, uint16_t *dst,
+                                    size_t dst_cap_u16,
+                                    uint32_t *out_w, uint32_t *out_h)
 {
     uint32_t dw;
     uint32_t dh;
     uint32_t y;
     uint32_t x;
+    uint32_t fy;
+    uint32_t fx;
 
-    if (!src || !dst || !out_w || !out_h || w == 0 || h == 0) return false;
-    if (w > (UINT32_MAX / 2) || h > (UINT32_MAX / 2)) return false;
-    dw = w * 2u;
-    dh = h * 2u;
+    if (!src || !dst || !out_w || !out_h || w == 0 || h == 0 || factor == 0) {
+        return false;
+    }
+    if (factor > 8u) return false;
+    if (w > (UINT32_MAX / factor) || h > (UINT32_MAX / factor)) return false;
+    dw = w * factor;
+    dh = h * factor;
     if ((uint64_t)dw * dh > dst_cap_u16) return false;
 
     /* 从右下往左上写,src==dst 时也不会覆盖尚未读取的源像素。 */
     for (y = h; y-- > 0; ) {
         for (x = w; x-- > 0; ) {
             uint16_t px = src[y * w + x];
-            uint32_t d0 = (y * 2u) * dw + (x * 2u);
-            dst[d0] = px;
-            dst[d0 + 1] = px;
-            dst[d0 + dw] = px;
-            dst[d0 + dw + 1] = px;
+            uint32_t dx0 = x * factor;
+            uint32_t dy0 = y * factor;
+            for (fy = 0; fy < factor; fy++) {
+                uint32_t row = (dy0 + fy) * dw + dx0;
+                for (fx = 0; fx < factor; fx++) {
+                    dst[row + fx] = px;
+                }
+            }
         }
     }
     *out_w = dw;
     *out_h = dh;
     return true;
+}
+
+bool pokedex_layout_scale2x_rgb565(const uint16_t *src, uint32_t w, uint32_t h,
+                                   uint16_t *dst, size_t dst_cap_u16,
+                                   uint32_t *out_w, uint32_t *out_h)
+{
+    return pokedex_layout_scale_nn_rgb565(src, w, h, 2u, dst, dst_cap_u16,
+                                          out_w, out_h);
 }
 
 bool pokedex_layout_dark_ink(uint32_t rgb888)

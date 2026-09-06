@@ -68,7 +68,7 @@ static void test_no_scale_blend(void)
     CHECK(read565(out, 2, 2, W) == expect);
     CHECK(read565(out, 0, 1, W) == 0xFFFF); /* 不透明白 */
 
-    /* 编码为 PNG 走完整管线(4x4 ≤ 96x96,应原样输出)。 */
+    /* 编码为 PNG 走完整管线(4x4 ≤ 144x144,应原样输出)。 */
     uint8_t *png = NULL;
     size_t png_len = 0;
     CHECK(lodepng_encode_memory(&png, &png_len, rgba, W, H, LCT_RGBA, 8) == 0);
@@ -87,8 +87,8 @@ static void test_downscale_nearest(void)
     static uint16_t out[POKEDEX_SPRITE_MAX_BYTES / 2];
     uint32_t ow = 0, oh = 0;
 
-    /* 左半红(RGB 255,0,0)、右半蓝;192x96 → 96x48,
-       最近邻取源 (x*192/96, y*96/48) = (2x, 2y)。 */
+    /* 左半红(RGB 255,0,0)、右半蓝;192x96 → 144x72,
+       最近邻取源 (x*192/144, y*96/72) = (x*4/3, y*4/3)。 */
     for (uint32_t y = 0; y < H; y++) {
         for (uint32_t x = 0; x < W; x++) {
             uint32_t i = (y * W + x) * 4;
@@ -102,11 +102,11 @@ static void test_downscale_nearest(void)
     size_t png_len = 0;
     CHECK(lodepng_encode_memory(&png, &png_len, rgba, W, H, LCT_RGBA, 8) == 0);
     CHECK(pokedex_sprite_render(png, png_len, out, sizeof(out) / 2, &ow, &oh, 0xFFFF));
-    CHECK(ow == 96 && oh == 48);
-    CHECK(read565(out, 0, 0, 96) == 0xF800);   /* 左红 */
-    CHECK(read565(out, 47, 0, 96) == 0xF800);  /* x=47 -> src x=94,仍左半红 */
-    CHECK(read565(out, 48, 0, 96) == 0x001F);  /* x=48 -> src x=96,右半蓝 */
-    CHECK(read565(out, 95, 47, 96) == 0x001F); /* 右下蓝 */
+    CHECK(ow == 144 && oh == 72);
+    CHECK(read565(out, 0, 0, 144) == 0xF800);    /* 左红 */
+    CHECK(read565(out, 71, 0, 144) == 0xF800);   /* x=71 -> src x=94,仍左半红 */
+    CHECK(read565(out, 72, 0, 144) == 0x001F);   /* x=72 -> src x=96,右半蓝 */
+    CHECK(read565(out, 143, 71, 144) == 0x001F); /* 右下蓝 */
     free(png);
 }
 

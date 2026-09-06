@@ -14,7 +14,7 @@
 // 足够大的 rgb565 输出缓冲(至少 POKEDEX_SPRITE_MAX_BYTES)。
 //
 // 返回 false 表示 PNG 损坏/不支持的格式/输出缓冲太小。
-// 成功时 *out_w / *out_h 为实际输出尺寸(1..96)。
+// 成功时 *out_w / *out_h 为实际输出尺寸(1..POKEDEX_SPRITE_MAX_W/H)。
 //
 // bg_rgb565:透明像素混合用的背景色(RGB565 小端),精灵图在浅色面板上
 // 显示时传 UI_PAPER 对应的 0xF4F4EA 即可,透明度按 alpha 线性混合。

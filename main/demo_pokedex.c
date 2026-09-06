@@ -48,6 +48,13 @@
 #define CS_DIM    0x90A99Au
 #define CS_WARN   0xF0C070u
 
+static uint16_t rgb888_to_565(uint32_t rgb)
+{
+    return (uint16_t)(((rgb >> 8) & 0xF800u) |
+                      ((rgb >> 5) & 0x07E0u) |
+                      ((rgb >> 3) & 0x001Fu));
+}
+
 typedef enum {
     VIEW_LIST = 0,
     VIEW_DETAIL,
@@ -145,6 +152,7 @@ static pokedex_find_layout_t s_find_lay;
 static pokedex_jump_layout_t s_jump_lay;
 
 static uint16_t       s_sprite_pixels[POKEDEX_SPRITE_MAX_BYTES / 2];
+static uint16_t       s_sprite_src[POKEDEX_STATIC_SPRITE_BYTES / 2];
 static lv_image_dsc_t s_sprite_dsc;
 
 static TaskHandle_t    s_worker;
@@ -166,7 +174,7 @@ static const char *TAG = "pokedex";
 
 static const lv_font_t *ui_font(void)
 {
-    return s_lang == POKEDEX_LANG_ZH ? &chinese_14 : &lv_font_montserrat_14;
+    return &chinese_14;
 }
 
 static void upper(char *s)
@@ -398,11 +406,17 @@ static void apply_detail(uint32_t id)
     if (pokedex_sprite_static(_binary_pokedex_sprites_bin_start,
                               (size_t)(_binary_pokedex_sprites_bin_end -
                                        _binary_pokedex_sprites_bin_start),
-                              id, s_sprite_pixels,
-                              sizeof(s_sprite_pixels) / 2, &w, &h) &&
-        pokedex_layout_scale2x_rgb565(s_sprite_pixels, w, h, s_sprite_pixels,
-                                      sizeof(s_sprite_pixels) / 2, &w, &h)) {
-        ui_show_sprite_locked(w, h);
+                              id, s_sprite_src,
+                              sizeof(s_sprite_src) / 2, &w, &h) &&
+        w > 0 && h > 0 &&
+        pokedex_layout_fit_sprite_rgb565(s_sprite_src, w, h,
+                                         rgb888_to_565(CS_BG),
+                                         s_sprite_pixels,
+                                         POKEDEX_LAYOUT_SPRITE_PX,
+                                         POKEDEX_LAYOUT_SPRITE_PX,
+                                         sizeof(s_sprite_pixels) / 2)) {
+        ui_show_sprite_locked(POKEDEX_LAYOUT_SPRITE_PX,
+                              POKEDEX_LAYOUT_SPRITE_PX);
     } else if (s_sprite_hint) {
         lv_obj_add_flag(s_sprite, LV_OBJ_FLAG_HIDDEN);
         lv_obj_remove_flag(s_sprite_hint, LV_OBJ_FLAG_HIDDEN);
@@ -715,7 +729,7 @@ static void build_jump(void)
     for (i = 0; i < 4; i++) {
         s_digit_bg[i] = flag_block(s_scr, s_jump_lay.digit[i], CS_BG_DK, 6);
         s_digit_lab[i] = lv_label_create(s_digit_bg[i]);
-        lv_obj_set_style_text_font(s_digit_lab[i], &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_font(s_digit_lab[i], ui_font(), 0);
         lv_obj_set_style_text_color(s_digit_lab[i], lv_color_hex(CS_TEXT), 0);
         lv_obj_center(s_digit_lab[i]);
         lv_label_set_text(s_digit_lab[i], "0");

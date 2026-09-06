@@ -15,8 +15,8 @@
 #define POKEDEX_GEN_COUNT  9u
 
 // 精灵图显示上限:由 240x320 屏幕布局决定(见 demo_pokedex.c 的精灵面板)。
-#define POKEDEX_SPRITE_MAX_W       96u
-#define POKEDEX_SPRITE_MAX_H       96u
+#define POKEDEX_SPRITE_MAX_W       144u
+#define POKEDEX_SPRITE_MAX_H       144u
 #define POKEDEX_SPRITE_MAX_BYTES   (POKEDEX_SPRITE_MAX_W * POKEDEX_SPRITE_MAX_H * 2u) /* RGB565 */
 
 // 掉电保存的序列化 blob:定长、显式偏移、小端。改布局必须升版本号并

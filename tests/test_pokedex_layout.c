@@ -63,10 +63,10 @@ static void test_bounds_and_nesting(void)
 
     CHECK(L.sprite.w == POKEDEX_LAYOUT_SPRITE_PX);
     CHECK(L.sprite.h == POKEDEX_LAYOUT_SPRITE_PX);
-    CHECK(L.name.w == 120);
-    CHECK(L.name.h >= 32); /* 14px 两行,长种名折行而不进精灵井 */
-    CHECK(L.name.x + L.name.w <= L.sprite_frame.x);
-    CHECK(L.flavor_text.h >= 80); /* 至少约 5 行 14px 字 */
+    CHECK(L.sprite.w == 144);
+    CHECK(L.name.w >= 120); /* 立绘下方与编号同一行 */
+    CHECK(L.name.h >= 16);
+    CHECK(L.flavor_text.h >= 24); /* 立绘下方仍留约 2 行概述 */
 }
 
 static void test_no_sibling_overlap(void)
@@ -91,6 +91,7 @@ static void test_no_sibling_overlap(void)
     check_no_overlap(L.badge[0], L.stats, "badge0", "stats");
     check_no_overlap(L.badge[1], L.stats, "badge1", "stats");
     check_no_overlap(L.name, L.stats, "name", "stats");
+    check_no_overlap(L.number_chip, L.stats, "number", "stats");
     check_no_overlap(L.sprite_frame, L.stats, "sprite", "stats");
     check_no_overlap(L.stats, L.flavor_frame, "stats", "flavor");
     check_no_overlap(L.flavor_frame, L.tally_seen, "flavor", "seen");
@@ -199,6 +200,46 @@ static void test_scale2x(void)
     CHECK(!pokedex_layout_scale2x_rgb565(buf, 0, 2, buf, 16, &dw, &dh));
 }
 
+static void test_fit_sprite(void)
+{
+    uint16_t src[16];
+    uint16_t dst[36];
+    int i;
+
+    for (i = 0; i < 16; i++) src[i] = 0x0000;
+    src[5] = 0xF800;
+    src[6] = 0x07E0;
+    src[9] = 0x001F;
+    src[10] = 0xFFFF;
+    CHECK(pokedex_layout_fit_sprite_rgb565(src, 4, 4, 0x0000, dst, 6, 6, 36));
+    CHECK(dst[0] == 0xF800 && dst[2] == 0xF800);
+    CHECK(dst[3] == 0x07E0 && dst[5] == 0x07E0);
+    CHECK(dst[18] == 0x001F);
+    CHECK(dst[21] == 0xFFFF && dst[35] == 0xFFFF);
+    CHECK(!pokedex_layout_fit_sprite_rgb565(src, 4, 4, 0x0000, dst, 6, 6, 35));
+    CHECK(!pokedex_layout_fit_sprite_rgb565(src, 4, 4, 0x0000, src, 6, 6, 36));
+}
+
+static void test_scale3x(void)
+{
+    uint16_t buf[36];
+    uint32_t dw = 0, dh = 0;
+
+    buf[0] = 0xF800;
+    buf[1] = 0x07E0;
+    buf[2] = 0x001F;
+    buf[3] = 0xFFFF;
+    CHECK(pokedex_layout_scale_nn_rgb565(buf, 2, 2, 3, buf, 36, &dw, &dh));
+    CHECK(dw == 6 && dh == 6);
+    CHECK(buf[0] == 0xF800 && buf[2] == 0xF800);
+    CHECK(buf[12] == 0xF800);
+    CHECK(buf[3] == 0x07E0 && buf[5] == 0x07E0);
+    CHECK(buf[18] == 0x001F);
+    CHECK(buf[21] == 0xFFFF && buf[35] == 0xFFFF);
+    CHECK(!pokedex_layout_scale_nn_rgb565(buf, 2, 2, 3, buf, 35, &dw, &dh));
+    CHECK(!pokedex_layout_scale_nn_rgb565(buf, 2, 2, 0, buf, 36, &dw, &dh));
+}
+
 static void test_browse_layouts(void)
 {
     pokedex_list_layout_t L;
@@ -267,9 +308,9 @@ static void test_lang_formatters(void)
     CHECK(strcmp(buf, "已见 12") == 0);
 
     pokedex_layout_format_stats_lang(4, 60, POKEDEX_LANG_EN, buf, sizeof(buf));
-    CHECK(strcmp(buf, "HT 0.4 m    WT 6.0 kg") == 0);
+    CHECK(strcmp(buf, "HT 0.4 m   WT 6.0 kg") == 0);
     pokedex_layout_format_stats_lang(4, 60, POKEDEX_LANG_ZH, buf, sizeof(buf));
-    CHECK(strcmp(buf, "身高 0.4 m    体重 6.0 kg") == 0);
+    CHECK(strcmp(buf, "身高 0.4 m   体重 6.0 kg") == 0);
 
     pokedex_layout_type_label("electric", POKEDEX_LANG_EN, buf, sizeof(buf));
     CHECK(strcmp(buf, "ELE") == 0);
@@ -318,6 +359,8 @@ int main(void)
     test_formatters();
     test_clip_desc();
     test_scale2x();
+    test_fit_sprite();
+    test_scale3x();
     test_dark_ink();
     test_browse_layouts();
     test_lang_formatters();
