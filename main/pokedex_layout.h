@@ -18,6 +18,9 @@
 #define POKEDEX_LAYOUT_DESC_MAX     191  /* 与静态 desc 上限对齐,滚动视口展示 */
 #define POKEDEX_FLAVOR_HOLD_TICKS   20   /* 两端停顿,配合 80ms tick ≈ 1.6s */
 #define POKEDEX_FLAVOR_STEP_PX      1
+#define POKEDEX_LAYOUT_ZOOM_MIN     2    /* 官方画布 2x */
+#define POKEDEX_LAYOUT_ZOOM_MAX     4    /* 4=裁切铺满 144 井 */
+#define POKEDEX_LAYOUT_ZOOM_DEF     3    /* 官方画布 3x */
 #define POKEDEX_LIST_ROWS         7
 
 typedef enum {
@@ -136,6 +139,9 @@ void pokedex_flavor_scroll_init(pokedex_flavor_scroll_t *s,
                                 int content_h, int view_h);
 bool pokedex_flavor_scroll_active(const pokedex_flavor_scroll_t *s);
 int16_t pokedex_flavor_scroll_tick(pokedex_flavor_scroll_t *s);
+
+// 详情页立绘缩放:2/3 为官方画布整数倍,4 为裁切铺满。dir>0 放大,dir<0 缩小,钳在 [min,max]。
+int pokedex_layout_zoom_nudge(int zoom, int32_t dir, int minz, int maxz);
 int pokedex_layout_format_gen_line(uint32_t gen, pokedex_lang_t lang,
                                    char *buf, size_t cap);
 int pokedex_layout_format_jump_item(pokedex_lang_t lang, char *buf, size_t cap);

@@ -410,6 +410,19 @@ int16_t pokedex_flavor_scroll_tick(pokedex_flavor_scroll_t *s)
     return s->y;
 }
 
+int pokedex_layout_zoom_nudge(int zoom, int32_t dir, int minz, int maxz)
+{
+    if (minz > maxz) return zoom;
+    if (dir > 0) {
+        zoom++;
+        if (zoom > maxz) zoom = maxz;
+    } else if (dir < 0) {
+        zoom--;
+        if (zoom < minz) zoom = minz;
+    }
+    return zoom;
+}
+
 int pokedex_layout_format_gen_line(uint32_t gen, pokedex_lang_t lang,
                                    char *buf, size_t cap)
 {

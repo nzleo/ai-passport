@@ -36,5 +36,5 @@ void demo_low_power_key(bsp_btn_t btn, bsp_btn_ev_t ev);
 
 void demo_pokedex_enter(void); void demo_pokedex_exit(void);
 void demo_pokedex_key(bsp_btn_t btn, bsp_btn_ev_t ev);
-bool demo_pokedex_at_root(void);                 // 列表页才允许长按确定回菜单
+bool demo_pokedex_at_root(void);                 // 图鉴在前台时不把长按确定交给菜单
 void demo_pokedex_debug_line(const char *line);  // 串口 FAP_POKEDEX_* 调试,仅观测导航/语言

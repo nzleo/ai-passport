@@ -389,6 +389,15 @@ static void test_flavor_scroll(void)
     CHECK(pokedex_flavor_scroll_tick(&s) == 29);
 }
 
+static void test_zoom_nudge(void)
+{
+    CHECK(pokedex_layout_zoom_nudge(3, 1, 2, 4) == 4);
+    CHECK(pokedex_layout_zoom_nudge(4, 1, 2, 4) == 4);
+    CHECK(pokedex_layout_zoom_nudge(3, -1, 2, 4) == 2);
+    CHECK(pokedex_layout_zoom_nudge(2, -1, 2, 4) == 2);
+    CHECK(pokedex_layout_zoom_nudge(3, 0, 2, 4) == 3);
+}
+
 static void test_dark_ink(void)
 {
     CHECK(pokedex_layout_dark_ink(0xF7D02C));  /* electric */
@@ -414,6 +423,7 @@ int main(void)
     test_browse_layouts();
     test_lang_formatters();
     test_flavor_scroll();
+    test_zoom_nudge();
 
     if (s_failures) {
         fprintf(stderr, "pokedex_layout: %d check(s) failed\n", s_failures);

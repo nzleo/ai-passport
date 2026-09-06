@@ -6,6 +6,11 @@
 
 ## Unreleased
 
+- Pokédex buttons: on the list, long-press UP/DOWN skips 10 and long-press
+  OK switches language (this no longer returns to the demo menu). On
+  detail, long-press UP/DOWN zooms the sprite, double-press UP/DOWN skips
+  10, OK plays the cry, double-press OK translates, and long-press OK
+  returns to the list.
 - Pokédex detail keeps the official 48×48 canvas and nearest-neighbor
   scales it 3× (144 px, 1.5× the previous 2× size) without cropping.
   The art well vs flavor box stays about 2/3 : 1/3. Number sits on the

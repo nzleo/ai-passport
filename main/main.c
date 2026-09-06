@@ -85,7 +85,7 @@ static void on_key(bsp_btn_t btn, bsp_btn_ev_t ev, void *user) {
     if (s_active >= 0) {
         if (btn == BSP_BTN_OK && ev == BSP_BTN_LONG) {
             if (s_active == DEMO_POKEDEX && !demo_pokedex_at_root()) {
-                DEMOS[s_active].key(btn, ev);              // 图鉴:详情/查找退回列表
+                DEMOS[s_active].key(btn, ev);              // 图鉴自己处理长按确定
             } else {
                 DEMOS[s_active].exit();
                 enter_menu();

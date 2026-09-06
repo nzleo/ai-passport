@@ -2,10 +2,9 @@
 //
 // 数据与图片全部内置固件(生成产物 tools/gen_pokedex_static.py,来源 PokeAPI
 // CC-BY 4.0):全国图鉴 1..1025(第 I–IX 世代)的基础数据 + 48x48 像素精灵图。
-// 查询:默认列表(世代内单击翻 1、双击按英文首字母跳组);长按 UP/DOWN
-// 打开查找(跳号 + 按字母 + 九世代)。详情页看图鉴与叫声。
-// OK 双击切换中/英(NVS 记住)。列表页长按 OK 回菜单(main.c);
-// 其它页长按 OK 退回列表。
+// 列表:单击上下翻 1,长按上下跳 10,确定进详情,长按确定切中/英(NVS)。
+// 详情:单击上下翻 1,双击上下跳 10,长按上放大/长按下缩小立绘;
+// 确定叫声,双击翻译,长按回列表。查找页仍可由串口调试进入。
 // 见过/上次查看/语言保存在 NVS(命名空间 "pokedex"),掉电不丢失。
 // 叫声在 cryfs 分区,Opus 8 kbps;解码与 I2S 写入在独立任务,按键回调不阻塞。
 #include "demo.h"
@@ -160,6 +159,7 @@ static volatile bool   s_state_dirty;
 static volatile bool   s_lang_dirty;
 static pokedex_view_t  s_view;
 static pokedex_lang_t  s_lang;
+static uint8_t         s_zoom = POKEDEX_LAYOUT_ZOOM_DEF;
 static uint32_t        s_find_sel;
 static uint32_t        s_jump_value;
 static unsigned        s_jump_cursor;
@@ -196,27 +196,21 @@ static const char *hint_text(pokedex_view_t v)
 {
     if (s_lang == POKEDEX_LANG_ZH) {
         switch (v) {
-        case VIEW_LIST:   return "确定打开  双击按字母\n长按查找  确定x2 中英";
-        case VIEW_DETAIL: return "确定叫声  双击跳10\n长按查找  确定x2 中英";
+        case VIEW_LIST:   return "确定打开  长按中英\n长按上下跳10";
+        case VIEW_DETAIL: return "确定叫声  双击跳10\n长按返回  长按上下 ZOOM";
         case VIEW_FIND:   return "确定选择  长按返回";
         case VIEW_JUMP:   return "确定跳转  双击返回\n上下改位";
         case VIEW_NAME:   return "确定跳转  长按返回";
         }
     }
     switch (v) {
-    case VIEW_LIST:   return "OK OPEN  x2 LETTER\nHOLD FIND  OK x2 LANG";
-    case VIEW_DETAIL: return "OK CRY  x2 SKIP 10\nHOLD FIND  OK x2 LANG";
+    case VIEW_LIST:   return "OK OPEN  HOLD LANG\nHOLD UP/DN SKIP 10";
+    case VIEW_DETAIL: return "OK CRY  x2 SKIP 10\nHOLD BACK  HOLD UP/DN ZOOM";
     case VIEW_FIND:   return "OK SELECT  HOLD BACK";
     case VIEW_JUMP:   return "OK GO  x2 BACK\nUP/DN DIGIT";
     case VIEW_NAME:   return "OK GO  HOLD BACK";
     }
     return "";
-}
-
-static uint32_t id_en_key(uint32_t id)
-{
-    if (!pokedex_id_in_range(id)) return (uint32_t)'?';
-    return (uint32_t)pokedex_en_initial(pokedex_static_dex[id].name);
 }
 
 static void name_index_rebuild(void)
@@ -353,8 +347,17 @@ static void layout_badges(uint8_t t0, uint8_t t1)
     }
 }
 
+static uint16_t rgb888_to_565(uint32_t rgb)
+{
+    return (uint16_t)(((rgb >> 8) & 0xF800u) |
+                      ((rgb >> 5) & 0x07E0u) |
+                      ((rgb >> 3) & 0x001Fu));
+}
+
 static void ui_show_sprite_locked(uint32_t dw, uint32_t dh)
 {
+    pokedex_rect_t r;
+
     if (!s_scr || !s_sprite) return;
     s_sprite_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
     s_sprite_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
@@ -363,7 +366,12 @@ static void ui_show_sprite_locked(uint32_t dw, uint32_t dh)
     s_sprite_dsc.header.stride = (uint16_t)(dw * 2);
     s_sprite_dsc.data_size = dw * dh * 2;
     s_sprite_dsc.data = (const uint8_t *)s_sprite_pixels;
-    apply_rect(s_sprite, s_lay.sprite);
+    r = s_lay.sprite;
+    if ((int)dw < r.w) r.x = (int16_t)(r.x + (r.w - (int)dw) / 2);
+    if ((int)dh < r.h) r.y = (int16_t)(r.y + (r.h - (int)dh) / 2);
+    r.w = (int16_t)dw;
+    r.h = (int16_t)dh;
+    apply_rect(s_sprite, r);
     lv_image_set_src(s_sprite, &s_sprite_dsc);
     lv_obj_remove_flag(s_sprite, LV_OBJ_FLAG_HIDDEN);
     if (s_sprite_hint) lv_obj_add_flag(s_sprite_hint, LV_OBJ_FLAG_HIDDEN);
@@ -401,6 +409,8 @@ static void flavor_scroll_sync(void)
     }
 }
 
+static void apply_sprite(uint32_t id);
+
 static void apply_detail(uint32_t id)
 {
     const pokedex_static_entry_t *e = &pokedex_static_dex[id];
@@ -433,19 +443,38 @@ static void apply_detail(uint32_t id)
     }
 
     ui_update_tally();
+    apply_sprite(id);
+}
 
+static void apply_sprite(uint32_t id)
+{
     uint32_t w = 0, h = 0, dw = 0, dh = 0;
+    bool ok = false;
+
     if (pokedex_sprite_static(_binary_pokedex_sprites_bin_start,
                               (size_t)(_binary_pokedex_sprites_bin_end -
                                        _binary_pokedex_sprites_bin_start),
                               id, s_sprite_src,
                               sizeof(s_sprite_src) / 2, &w, &h) &&
-        w > 0 && h > 0 &&
-        pokedex_layout_scale_nn_rgb565(s_sprite_src, w, h,
-                                       POKEDEX_LAYOUT_SPRITE_SCALE,
-                                       s_sprite_pixels,
-                                       sizeof(s_sprite_pixels) / 2,
-                                       &dw, &dh)) {
+        w > 0 && h > 0) {
+        if (s_zoom >= POKEDEX_LAYOUT_ZOOM_MAX) {
+            ok = pokedex_layout_fit_sprite_rgb565(s_sprite_src, w, h,
+                                                  rgb888_to_565(CS_BG),
+                                                  s_sprite_pixels,
+                                                  POKEDEX_LAYOUT_SPRITE_PX,
+                                                  POKEDEX_LAYOUT_SPRITE_PX,
+                                                  sizeof(s_sprite_pixels) / 2);
+            dw = POKEDEX_LAYOUT_SPRITE_PX;
+            dh = POKEDEX_LAYOUT_SPRITE_PX;
+        } else {
+            ok = pokedex_layout_scale_nn_rgb565(s_sprite_src, w, h,
+                                                (uint32_t)s_zoom,
+                                                s_sprite_pixels,
+                                                sizeof(s_sprite_pixels) / 2,
+                                                &dw, &dh);
+        }
+    }
+    if (ok) {
         ui_show_sprite_locked(dw, dh);
     } else if (s_sprite_hint) {
         lv_obj_add_flag(s_sprite, LV_OBJ_FLAG_HIDDEN);
@@ -862,7 +891,7 @@ static void toggle_lang(void)
 
 bool demo_pokedex_at_root(void)
 {
-    return s_scr == NULL || s_view == VIEW_LIST;
+    return s_scr == NULL; /* 在图鉴里长按确定不回菜单 */
 }
 
 void demo_pokedex_debug_line(const char *line)
@@ -887,7 +916,7 @@ void demo_pokedex_debug_line(const char *line)
             show_view(VIEW_NAME);
         }
     } else if (strncmp(line, "FAP_POKEDEX_LANG ", 17) == 0) {
-        /* 仅观测:改当前屏,不写 NVS。保存语言只走确定双击。 */
+        /* 仅观测:改当前屏,不写 NVS。保存语言走列表长按确定或详情双击。 */
         s_lang = (line[17] == 'z' || line[17] == 'Z')
                  ? POKEDEX_LANG_ZH : POKEDEX_LANG_EN;
         ui_rebuild();
@@ -905,14 +934,15 @@ void demo_pokedex_key(bsp_btn_t btn, bsp_btn_ev_t ev)
     bsp_display_backlight(100);
 
     if (btn == BSP_BTN_OK && ev == BSP_BTN_LONG) {
-        if (s_view == VIEW_JUMP || s_view == VIEW_NAME) show_view(VIEW_FIND);
-        else if (s_view != VIEW_LIST) show_view(VIEW_LIST);
+        if (s_view == VIEW_LIST) toggle_lang();
+        else if (s_view == VIEW_JUMP || s_view == VIEW_NAME) show_view(VIEW_FIND);
+        else show_view(VIEW_LIST);
         return;
     }
 
     if (btn == BSP_BTN_OK && ev == BSP_BTN_DOUBLE) {
         if (s_view == VIEW_JUMP) show_view(VIEW_FIND);
-        else toggle_lang();
+        else if (s_view == VIEW_DETAIL) toggle_lang();
         return;
     }
 
@@ -961,28 +991,30 @@ void demo_pokedex_key(bsp_btn_t btn, bsp_btn_ev_t ev)
         int32_t dir = (btn == BSP_BTN_UP) ? -1 : 1;
         if (s_view == VIEW_LIST) {
             uint32_t id = s_state.last_id;
-            if (ev == BSP_BTN_CLICK) id = pokedex_step_in_gen(id, dir);
-            else if (ev == BSP_BTN_DOUBLE) {
-                id = pokedex_step_key_in_range(id, dir,
-                                               pokedex_gen_first(id),
-                                               pokedex_gen_last(id),
-                                               id_en_key);
+            if (ev == BSP_BTN_CLICK) {
+                id = pokedex_step_in_gen(id, dir);
+            } else if (ev == BSP_BTN_LONG) {
+                id = pokedex_step_in_gen(id, dir * 10);
             } else {
-                s_find_sel = pokedex_find_sel_for_id(id);
-                show_view(VIEW_FIND);
                 return;
             }
             pokedex_cry_play_stop();
             goto_id(id);
         } else if (s_view == VIEW_DETAIL) {
             uint32_t id = s_state.last_id;
-            if (ev == BSP_BTN_CLICK) id = pokedex_step(id, dir);
-            else if (ev == BSP_BTN_DOUBLE) id = pokedex_step(id, dir * 10);
-            else {
-                s_find_sel = pokedex_find_sel_for_id(id);
-                show_view(VIEW_FIND);
+            if (ev == BSP_BTN_LONG) {
+                int z = pokedex_layout_zoom_nudge((int)s_zoom, -dir,
+                                                  POKEDEX_LAYOUT_ZOOM_MIN,
+                                                  POKEDEX_LAYOUT_ZOOM_MAX);
+                if (z != (int)s_zoom) {
+                    s_zoom = (uint8_t)z;
+                    apply_sprite(id);
+                }
                 return;
             }
+            if (ev == BSP_BTN_CLICK) id = pokedex_step(id, dir);
+            else if (ev == BSP_BTN_DOUBLE) id = pokedex_step(id, dir * 10);
+            else return;
             pokedex_cry_play_stop();
             goto_id(id);
         } else if (s_view == VIEW_FIND) {
