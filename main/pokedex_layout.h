@@ -1,7 +1,8 @@
 // main/pokedex_layout.h —— 掌上图鉴 240x320 布局几何。
 // 纯 C,不依赖 ESP-IDF/LVGL,可在宿主机单测(tests/test_pokedex_layout.c)。
-// 详情页把 144px 精灵井放到顶栏下方居中,编号/名字/属性跟在立绘下面,底部给
-// 概述和见过计数。所有矩形必须落在屏内且兄弟区域不相交。
+// 详情页把 144px 精灵井放到顶栏下方居中;编号+属性、名字、身高、体重叠在
+// 立绘四角,腾出的下半屏给概述。概述超出视口时由 flavor_scroll 往返慢滚。
+// 四角花牌落在精灵框内且互不相交;概述与底栏不相交。
 #pragma once
 
 #include <stdbool.h>
@@ -13,8 +14,10 @@
 #define POKEDEX_LAYOUT_SPRITE_PX    144  /* 48px 像素图最近邻 3x */
 #define POKEDEX_LAYOUT_SPRITE_SCALE 3u
 #define POKEDEX_LAYOUT_BADGE_W      44   /* 3 字母 / 2 汉字属性芯片 */
-#define POKEDEX_LAYOUT_BADGE_H      18
-#define POKEDEX_LAYOUT_DESC_MAX     90   /* 概述约 2–3 行,14px */
+#define POKEDEX_LAYOUT_BADGE_H      16
+#define POKEDEX_LAYOUT_DESC_MAX     191  /* 与静态 desc 上限对齐,滚动视口展示 */
+#define POKEDEX_FLAVOR_HOLD_TICKS   20   /* 两端停顿,配合 80ms tick ≈ 1.6s */
+#define POKEDEX_FLAVOR_STEP_PX      1
 #define POKEDEX_LIST_ROWS         7
 
 typedef enum {
@@ -38,10 +41,13 @@ typedef struct {
     pokedex_rect_t sprite;
     pokedex_rect_t number_chip;
     pokedex_rect_t number;
+    pokedex_rect_t name_chip;
     pokedex_rect_t name;
     pokedex_rect_t badge[2];
-    pokedex_rect_t stats;
-    pokedex_rect_t stats_text;
+    pokedex_rect_t height;
+    pokedex_rect_t height_text;
+    pokedex_rect_t weight;
+    pokedex_rect_t weight_text;
     pokedex_rect_t flavor_frame;
     pokedex_rect_t flavor_inner;
     pokedex_rect_t flavor_text;
@@ -113,6 +119,23 @@ int pokedex_layout_format_seen_lang(uint32_t n, pokedex_lang_t lang,
 int pokedex_layout_format_stats_lang(int height_dm, int weight_hg,
                                      pokedex_lang_t lang,
                                      char *buf, size_t cap);
+int pokedex_layout_format_height_lang(int height_dm, pokedex_lang_t lang,
+                                      char *buf, size_t cap);
+int pokedex_layout_format_weight_lang(int weight_hg, pokedex_lang_t lang,
+                                      char *buf, size_t cap);
+
+typedef struct {
+    int16_t y;
+    int16_t max_y;
+    int16_t hold;
+    int8_t  dir;
+} pokedex_flavor_scroll_t;
+
+// content_h <= view_h 时不滚动。需要滚动时先在顶端停 HOLD_TICKS,再 1px 往返。
+void pokedex_flavor_scroll_init(pokedex_flavor_scroll_t *s,
+                                int content_h, int view_h);
+bool pokedex_flavor_scroll_active(const pokedex_flavor_scroll_t *s);
+int16_t pokedex_flavor_scroll_tick(pokedex_flavor_scroll_t *s);
 int pokedex_layout_format_gen_line(uint32_t gen, pokedex_lang_t lang,
                                    char *buf, size_t cap);
 int pokedex_layout_format_jump_item(pokedex_lang_t lang, char *buf, size_t cap);

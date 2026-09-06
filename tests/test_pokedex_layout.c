@@ -40,11 +40,14 @@ static void test_bounds_and_nesting(void)
     CHECK(pokedex_rect_in_bounds(L.sprite, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
     CHECK(pokedex_rect_in_bounds(L.number_chip, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
     CHECK(pokedex_rect_in_bounds(L.number, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
+    CHECK(pokedex_rect_in_bounds(L.name_chip, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
     CHECK(pokedex_rect_in_bounds(L.name, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
     CHECK(pokedex_rect_in_bounds(L.badge[0], POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
     CHECK(pokedex_rect_in_bounds(L.badge[1], POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
-    CHECK(pokedex_rect_in_bounds(L.stats, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
-    CHECK(pokedex_rect_in_bounds(L.stats_text, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
+    CHECK(pokedex_rect_in_bounds(L.height, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
+    CHECK(pokedex_rect_in_bounds(L.height_text, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
+    CHECK(pokedex_rect_in_bounds(L.weight, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
+    CHECK(pokedex_rect_in_bounds(L.weight_text, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
     CHECK(pokedex_rect_in_bounds(L.flavor_frame, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
     CHECK(pokedex_rect_in_bounds(L.flavor_inner, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
     CHECK(pokedex_rect_in_bounds(L.flavor_text, POKEDEX_LAYOUT_W, POKEDEX_LAYOUT_H));
@@ -56,17 +59,25 @@ static void test_bounds_and_nesting(void)
     CHECK(pokedex_rect_contains(L.header, L.battery));
     CHECK(pokedex_rect_contains(L.sprite_frame, L.sprite_inner));
     CHECK(pokedex_rect_contains(L.sprite_inner, L.sprite));
+    CHECK(pokedex_rect_contains(L.sprite_frame, L.number_chip));
+    CHECK(pokedex_rect_contains(L.sprite_frame, L.name_chip));
+    CHECK(pokedex_rect_contains(L.sprite_frame, L.badge[0]));
+    CHECK(pokedex_rect_contains(L.sprite_frame, L.badge[1]));
+    CHECK(pokedex_rect_contains(L.sprite_frame, L.height));
+    CHECK(pokedex_rect_contains(L.sprite_frame, L.weight));
     CHECK(pokedex_rect_contains(L.number_chip, L.number));
-    CHECK(pokedex_rect_contains(L.stats, L.stats_text));
+    CHECK(pokedex_rect_contains(L.name_chip, L.name));
+    CHECK(pokedex_rect_contains(L.height, L.height_text));
+    CHECK(pokedex_rect_contains(L.weight, L.weight_text));
     CHECK(pokedex_rect_contains(L.flavor_frame, L.flavor_inner));
     CHECK(pokedex_rect_contains(L.flavor_inner, L.flavor_text));
 
     CHECK(L.sprite.w == POKEDEX_LAYOUT_SPRITE_PX);
     CHECK(L.sprite.h == POKEDEX_LAYOUT_SPRITE_PX);
     CHECK(L.sprite.w == 144);
-    CHECK(L.name.w >= 120); /* 立绘下方与编号同一行 */
-    CHECK(L.name.h >= 16);
-    CHECK(L.flavor_text.h >= 24); /* 立绘下方仍留约 2 行概述 */
+    CHECK(L.name.w >= 100); /* 右上角放下 WALKING WAKE */
+    CHECK(L.name.h >= 14);
+    CHECK(L.flavor_text.h >= 80); /* 四角叠立绘后概述约 6 行 */
 }
 
 static void test_no_sibling_overlap(void)
@@ -80,20 +91,18 @@ static void test_no_sibling_overlap(void)
     check_no_overlap(L.progress, L.battery, "progress", "battery");
     check_no_overlap(L.title, L.battery, "title", "battery");
 
-    check_no_overlap(L.number_chip, L.sprite_frame, "number", "sprite");
-    check_no_overlap(L.name, L.sprite_frame, "name", "sprite");
-    check_no_overlap(L.badge[0], L.sprite_frame, "badge0", "sprite");
-    check_no_overlap(L.badge[1], L.sprite_frame, "badge1", "sprite");
+    check_no_overlap(L.number_chip, L.name_chip, "number", "name");
+    check_no_overlap(L.number_chip, L.badge[0], "number", "badge0");
+    check_no_overlap(L.number_chip, L.badge[1], "number", "badge1");
     check_no_overlap(L.badge[0], L.badge[1], "badge0", "badge1");
-    check_no_overlap(L.number_chip, L.name, "number", "name");
-    check_no_overlap(L.name, L.badge[0], "name", "badge0");
-    check_no_overlap(L.name, L.badge[1], "name", "badge1");
-    check_no_overlap(L.badge[0], L.stats, "badge0", "stats");
-    check_no_overlap(L.badge[1], L.stats, "badge1", "stats");
-    check_no_overlap(L.name, L.stats, "name", "stats");
-    check_no_overlap(L.number_chip, L.stats, "number", "stats");
-    check_no_overlap(L.sprite_frame, L.stats, "sprite", "stats");
-    check_no_overlap(L.stats, L.flavor_frame, "stats", "flavor");
+    check_no_overlap(L.name_chip, L.badge[0], "name", "badge0");
+    check_no_overlap(L.name_chip, L.badge[1], "name", "badge1");
+    check_no_overlap(L.number_chip, L.height, "number", "height");
+    check_no_overlap(L.name_chip, L.weight, "name", "weight");
+    check_no_overlap(L.badge[0], L.height, "badge0", "height");
+    check_no_overlap(L.badge[1], L.height, "badge1", "height");
+    check_no_overlap(L.height, L.weight, "height", "weight");
+    check_no_overlap(L.sprite_frame, L.flavor_frame, "sprite", "flavor");
     check_no_overlap(L.flavor_frame, L.tally_seen, "flavor", "seen");
     check_no_overlap(L.tally_seen, L.hint, "seen", "hint");
 }
@@ -311,6 +320,14 @@ static void test_lang_formatters(void)
     CHECK(strcmp(buf, "HT 0.4 m   WT 6.0 kg") == 0);
     pokedex_layout_format_stats_lang(4, 60, POKEDEX_LANG_ZH, buf, sizeof(buf));
     CHECK(strcmp(buf, "身高 0.4 m   体重 6.0 kg") == 0);
+    pokedex_layout_format_height_lang(4, POKEDEX_LANG_ZH, buf, sizeof(buf));
+    CHECK(strcmp(buf, "身高 0.4 m") == 0);
+    pokedex_layout_format_weight_lang(60, POKEDEX_LANG_ZH, buf, sizeof(buf));
+    CHECK(strcmp(buf, "体重 6.0 kg") == 0);
+    pokedex_layout_format_height_lang(4, POKEDEX_LANG_EN, buf, sizeof(buf));
+    CHECK(strcmp(buf, "HT 0.4 m") == 0);
+    pokedex_layout_format_weight_lang(60, POKEDEX_LANG_EN, buf, sizeof(buf));
+    CHECK(strcmp(buf, "WT 6.0 kg") == 0);
 
     pokedex_layout_type_label("electric", POKEDEX_LANG_EN, buf, sizeof(buf));
     CHECK(strcmp(buf, "ELE") == 0);
@@ -340,6 +357,34 @@ static void test_lang_formatters(void)
     CHECK(strcmp(buf, "P  #025  皮卡丘") == 0);
 }
 
+static void test_flavor_scroll(void)
+{
+    pokedex_flavor_scroll_t s;
+    int i;
+    int16_t y;
+
+    pokedex_flavor_scroll_init(&s, 90, 90);
+    CHECK(!pokedex_flavor_scroll_active(&s));
+    CHECK(pokedex_flavor_scroll_tick(&s) == 0);
+    CHECK(pokedex_flavor_scroll_tick(NULL) == 0);
+
+    pokedex_flavor_scroll_init(&s, 120, 90);
+    CHECK(pokedex_flavor_scroll_active(&s));
+    CHECK(s.max_y == 30);
+    for (i = 0; i < POKEDEX_FLAVOR_HOLD_TICKS; i++) {
+        CHECK(pokedex_flavor_scroll_tick(&s) == 0);
+    }
+    CHECK(pokedex_flavor_scroll_tick(&s) == 1);
+    do {
+        y = pokedex_flavor_scroll_tick(&s);
+    } while (y < 30);
+    CHECK(y == 30);
+    for (i = 0; i < POKEDEX_FLAVOR_HOLD_TICKS; i++) {
+        CHECK(pokedex_flavor_scroll_tick(&s) == 30);
+    }
+    CHECK(pokedex_flavor_scroll_tick(&s) == 29);
+}
+
 static void test_dark_ink(void)
 {
     CHECK(pokedex_layout_dark_ink(0xF7D02C));  /* electric */
@@ -364,6 +409,7 @@ int main(void)
     test_dark_ink();
     test_browse_layouts();
     test_lang_formatters();
+    test_flavor_scroll();
 
     if (s_failures) {
         fprintf(stderr, "pokedex_layout: %d check(s) failed\n", s_failures);

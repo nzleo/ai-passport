@@ -38,7 +38,8 @@
 #define POKEDEX_WORKER_STACK 2048
 #define POKEDEX_WORKER_PRIO  5
 
-#define POKEDEX_IDLE_DIM_S 60
+#define POKEDEX_IDLE_DIM_S      60
+#define POKEDEX_FLAVOR_TICK_MS  80
 
 #define CS_BG     0x244238u
 #define CS_BG_DK  0x1A3730u
@@ -130,9 +131,11 @@ static lv_obj_t *badge_create(lv_obj_t *parent, pokedex_rect_t r, uint32_t color
 static lv_obj_t      *s_scr;
 static lv_obj_t      *s_sprite;
 static lv_obj_t      *s_sprite_hint;
-static lv_obj_t      *s_name, *s_htwt, *s_battery, *s_progress, *s_title;
+static lv_obj_t      *s_name, *s_height, *s_weight;
+static lv_obj_t      *s_battery, *s_progress, *s_title;
 static lv_obj_t      *s_no;
 static lv_obj_t      *s_badge[2];
+static lv_obj_t      *s_flavor_clip;
 static lv_obj_t      *s_desc;
 static lv_obj_t      *s_tally_seen;
 static lv_obj_t      *s_hint;
@@ -145,6 +148,8 @@ static lv_obj_t      *s_digit_lab[4];
 static lv_obj_t      *s_jump_prompt;
 static lv_timer_t    *s_bat_timer;
 static lv_timer_t    *s_idle_timer;
+static lv_timer_t    *s_flavor_timer;
+static pokedex_flavor_scroll_t s_flavor_scroll;
 static uint8_t        s_idle_sec;
 static pokedex_layout_t s_lay;
 static pokedex_list_layout_t s_list_lay;
@@ -371,6 +376,38 @@ static void ui_show_sprite_locked(uint32_t dw, uint32_t dh)
     if (s_sprite_hint) lv_obj_add_flag(s_sprite_hint, LV_OBJ_FLAG_HIDDEN);
 }
 
+static void flavor_timer_stop(void)
+{
+    if (s_flavor_timer) {
+        lv_timer_delete(s_flavor_timer);
+        s_flavor_timer = NULL;
+    }
+}
+
+static void flavor_tick(lv_timer_t *t)
+{
+    (void)t;
+    if (!s_desc) return;
+    lv_obj_set_y(s_desc, -pokedex_flavor_scroll_tick(&s_flavor_scroll));
+}
+
+static void flavor_scroll_sync(void)
+{
+    int content_h;
+    int view_h;
+
+    flavor_timer_stop();
+    if (!s_desc || !s_flavor_clip) return;
+    lv_obj_set_y(s_desc, 0);
+    lv_obj_update_layout(s_desc);
+    content_h = (int)lv_obj_get_height(s_desc);
+    view_h = s_lay.flavor_text.h;
+    pokedex_flavor_scroll_init(&s_flavor_scroll, content_h, view_h);
+    if (pokedex_flavor_scroll_active(&s_flavor_scroll)) {
+        s_flavor_timer = lv_timer_create(flavor_tick, POKEDEX_FLAVOR_TICK_MS, NULL);
+    }
+}
+
 static void apply_detail(uint32_t id)
 {
     const pokedex_static_entry_t *e = &pokedex_static_dex[id];
@@ -388,9 +425,10 @@ static void apply_detail(uint32_t id)
 
     layout_badges(e->type0, e->type1);
 
-    pokedex_layout_format_stats_lang(e->height_dm, e->weight_hg,
-                                     s_lang, buf, sizeof(buf));
-    lv_label_set_text(s_htwt, buf);
+    pokedex_layout_format_height_lang(e->height_dm, s_lang, buf, sizeof(buf));
+    lv_label_set_text(s_height, buf);
+    pokedex_layout_format_weight_lang(e->weight_hg, s_lang, buf, sizeof(buf));
+    lv_label_set_text(s_weight, buf);
 
     {
         const char *src = (s_lang == POKEDEX_LANG_ZH && e->desc_zh[0])
@@ -398,6 +436,7 @@ static void apply_detail(uint32_t id)
         char clip[POKEDEX_LAYOUT_DESC_MAX + 4];
         pokedex_layout_clip_desc(src, clip, sizeof(clip), 0);
         lv_label_set_text(s_desc, clip);
+        flavor_scroll_sync();
     }
 
     ui_update_tally();
@@ -570,7 +609,9 @@ static void ui_reset_ptrs(void)
     s_sprite = NULL;
     s_sprite_hint = NULL;
     s_name = NULL;
-    s_htwt = NULL;
+    s_height = NULL;
+    s_weight = NULL;
+    s_flavor_clip = NULL;
     s_battery = NULL;
     s_progress = NULL;
     s_title = NULL;
@@ -591,6 +632,7 @@ static void ui_reset_ptrs(void)
 
 static void ui_clear_scr(void)
 {
+    flavor_timer_stop();
     if (!s_scr) return;
     while (lv_obj_get_child_count(s_scr) > 0) {
         lv_obj_delete(lv_obj_get_child(s_scr, 0));
@@ -660,13 +702,15 @@ static void build_detail(void)
     lv_label_set_text(s_sprite_hint,
                       s_lang == POKEDEX_LANG_ZH ? "暂无图像" : "NO IMAGE");
 
-    flag_block(s_scr, s_lay.number_chip, CS_BRIGHT, 0);
+    /* 四角花牌在立绘之后创建,保证叠在精灵图上面。 */
+    flag_block(s_scr, s_lay.number_chip, CS_BRIGHT, 4);
     s_no = label_at(s_scr, s_lay.number, CS_BG_DK);
     lv_label_set_text(s_no, "NO.001");
 
+    flag_block(s_scr, s_lay.name_chip, CS_BG_DK, 4);
     s_name = label_at(s_scr, s_lay.name, CS_TEXT);
-    lv_label_set_long_mode(s_name, LV_LABEL_LONG_WRAP);
-    lv_obj_set_style_text_line_space(s_name, 0, 0);
+    lv_label_set_long_mode(s_name, LV_LABEL_LONG_CLIP);
+    lv_obj_set_style_text_align(s_name, LV_TEXT_ALIGN_RIGHT, 0);
     lv_label_set_text(s_name, "---");
 
     s_badge[0] = badge_create(s_scr, s_lay.badge[0], TYPE_COLORS[0]);
@@ -674,14 +718,25 @@ static void build_detail(void)
     lv_obj_add_flag(s_badge[0], LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_badge[1], LV_OBJ_FLAG_HIDDEN);
 
-    flag_block(s_scr, s_lay.stats, CS_BRIGHT, 0);
-    s_htwt = label_at(s_scr, s_lay.stats_text, CS_BG_DK);
-    lv_obj_set_style_text_align(s_htwt, LV_TEXT_ALIGN_CENTER, 0);
-    lv_label_set_text(s_htwt, "");
+    flag_block(s_scr, s_lay.height, CS_BG_DK, 4);
+    s_height = label_at(s_scr, s_lay.height_text, CS_TEXT);
+    lv_label_set_long_mode(s_height, LV_LABEL_LONG_CLIP);
+    lv_label_set_text(s_height, "");
+
+    flag_block(s_scr, s_lay.weight, CS_BG_DK, 4);
+    s_weight = label_at(s_scr, s_lay.weight_text, CS_TEXT);
+    lv_label_set_long_mode(s_weight, LV_LABEL_LONG_CLIP);
+    lv_obj_set_style_text_align(s_weight, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_label_set_text(s_weight, "");
 
     flag_block(s_scr, s_lay.flavor_frame, CS_FRAME, 0);
     flag_block(s_scr, s_lay.flavor_inner, CS_BG_DK, 0);
-    s_desc = label_at(s_scr, s_lay.flavor_text, CS_TEXT);
+    s_flavor_clip = flag_block(s_scr, s_lay.flavor_text, CS_BG_DK, 0);
+    s_desc = lv_label_create(s_flavor_clip);
+    lv_obj_set_style_text_font(s_desc, ui_font(), 0);
+    lv_obj_set_style_text_color(s_desc, lv_color_hex(CS_TEXT), 0);
+    lv_obj_set_pos(s_desc, 0, 0);
+    lv_obj_set_width(s_desc, s_lay.flavor_text.w);
     lv_label_set_long_mode(s_desc, LV_LABEL_LONG_WRAP);
     lv_label_set_text(s_desc, "");
 
@@ -1028,6 +1083,7 @@ void demo_pokedex_exit(void)
 
     s_exit = true;
 
+    flavor_timer_stop();
     lv_timer_delete(s_bat_timer);
     s_bat_timer = NULL;
     lv_timer_delete(s_idle_timer);

@@ -11,9 +11,9 @@ void pokedex_layout_build(pokedex_layout_t *out)
     if (!out) return;
     memset(out, 0, sizeof(*out));
 
-    /* 240x320 手持图鉴:顶栏身份,顶栏下居中 144px 精灵井(48px 3x),
-       立绘下方编号/名字/属性/身高体重,再下面概述,底栏见过与按键提示。
-       名字与编号同一行,224px 宽够放下 SQUAWKABILLY / WALKING WAKE。 */
+    /* 240x320 手持图鉴:顶栏身份,顶栏下居中 144px 精灵井(48px 3x)。
+       左上编号+属性、右上名字、左下身高、右下体重叠在立绘四角,
+       腾出的下半屏给概述(约 6 行),底栏见过与按键提示。 */
     out->screen      = (pokedex_rect_t){0, 0, 240, 320};
     out->header      = (pokedex_rect_t){0, 0, 240, 22};
     out->header_rule = (pokedex_rect_t){0, 22, 240, 2};
@@ -25,22 +25,26 @@ void pokedex_layout_build(pokedex_layout_t *out)
     out->sprite_inner = (pokedex_rect_t){10, 28, 220, 144};
     out->sprite       = (pokedex_rect_t){48, 28, 144, 144};
 
-    out->number_chip = (pokedex_rect_t){8, 178, 86, 18};
-    out->number      = (pokedex_rect_t){12, 180, 78, 14};
-    out->name        = (pokedex_rect_t){98, 176, 134, 20};
-    out->badge[0]    = (pokedex_rect_t){8, 198, POKEDEX_LAYOUT_BADGE_W,
+    out->number_chip = (pokedex_rect_t){10, 28, 80, 16};
+    out->number      = (pokedex_rect_t){12, 29, 76, 14};
+    out->badge[0]    = (pokedex_rect_t){10, 46, POKEDEX_LAYOUT_BADGE_W,
                                         POKEDEX_LAYOUT_BADGE_H};
-    out->badge[1]    = (pokedex_rect_t){56, 198, POKEDEX_LAYOUT_BADGE_W,
+    out->badge[1]    = (pokedex_rect_t){56, 46, POKEDEX_LAYOUT_BADGE_W,
                                         POKEDEX_LAYOUT_BADGE_H};
 
-    out->stats      = (pokedex_rect_t){8, 220, 224, 18};
-    out->stats_text = (pokedex_rect_t){8, 221, 224, 16};
+    out->name_chip = (pokedex_rect_t){118, 28, 112, 16};
+    out->name      = (pokedex_rect_t){120, 29, 108, 14};
 
-    out->flavor_frame = (pokedex_rect_t){8, 240, 224, 34};
-    out->flavor_inner = (pokedex_rect_t){10, 241, 220, 32};
-    out->flavor_text  = (pokedex_rect_t){14, 242, 212, 30};
+    out->height      = (pokedex_rect_t){10, 152, 104, 18};
+    out->height_text = (pokedex_rect_t){12, 153, 100, 16};
+    out->weight      = (pokedex_rect_t){126, 152, 104, 18};
+    out->weight_text = (pokedex_rect_t){128, 153, 100, 16};
 
-    out->tally_seen   = (pokedex_rect_t){8, 276, 224, 14};
+    out->flavor_frame = (pokedex_rect_t){8, 176, 224, 96};
+    out->flavor_inner = (pokedex_rect_t){10, 177, 220, 94};
+    out->flavor_text  = (pokedex_rect_t){14, 179, 212, 90};
+
+    out->tally_seen   = (pokedex_rect_t){8, 274, 224, 14};
     out->hint         = (pokedex_rect_t){8, 290, 224, 30};
 }
 
@@ -338,6 +342,71 @@ int pokedex_layout_format_stats_lang(int height_dm, int weight_hg,
         return snprintf(buf, cap, "身高 %s   体重 %s", h, w);
     }
     return snprintf(buf, cap, "HT %s   WT %s", h, w);
+}
+
+int pokedex_layout_format_height_lang(int height_dm, pokedex_lang_t lang,
+                                      char *buf, size_t cap)
+{
+    char h[16];
+
+    if (!buf || !cap) return 0;
+    pokedex_format_height(height_dm, h, sizeof(h));
+    if (lang == POKEDEX_LANG_ZH) {
+        return snprintf(buf, cap, "身高 %s", h);
+    }
+    return snprintf(buf, cap, "HT %s", h);
+}
+
+int pokedex_layout_format_weight_lang(int weight_hg, pokedex_lang_t lang,
+                                      char *buf, size_t cap)
+{
+    char w[16];
+
+    if (!buf || !cap) return 0;
+    pokedex_format_weight(weight_hg, w, sizeof(w));
+    if (lang == POKEDEX_LANG_ZH) {
+        return snprintf(buf, cap, "体重 %s", w);
+    }
+    return snprintf(buf, cap, "WT %s", w);
+}
+
+void pokedex_flavor_scroll_init(pokedex_flavor_scroll_t *s,
+                                int content_h, int view_h)
+{
+    if (!s) return;
+    memset(s, 0, sizeof(*s));
+    if (content_h < 0) content_h = 0;
+    if (view_h < 0) view_h = 0;
+    if (content_h > view_h) {
+        s->max_y = (int16_t)(content_h - view_h);
+        s->dir = 1;
+        s->hold = POKEDEX_FLAVOR_HOLD_TICKS;
+    }
+}
+
+bool pokedex_flavor_scroll_active(const pokedex_flavor_scroll_t *s)
+{
+    return s != NULL && s->max_y > 0;
+}
+
+int16_t pokedex_flavor_scroll_tick(pokedex_flavor_scroll_t *s)
+{
+    if (!s || s->max_y <= 0) return 0;
+    if (s->hold > 0) {
+        s->hold--;
+        return s->y;
+    }
+    s->y = (int16_t)(s->y + (int16_t)s->dir * (int16_t)POKEDEX_FLAVOR_STEP_PX);
+    if (s->y >= s->max_y) {
+        s->y = s->max_y;
+        s->dir = -1;
+        s->hold = POKEDEX_FLAVOR_HOLD_TICKS;
+    } else if (s->y <= 0) {
+        s->y = 0;
+        s->dir = 1;
+        s->hold = POKEDEX_FLAVOR_HOLD_TICKS;
+    }
+    return s->y;
 }
 
 int pokedex_layout_format_gen_line(uint32_t gen, pokedex_lang_t lang,

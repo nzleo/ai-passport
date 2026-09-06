@@ -6,6 +6,10 @@
 
 ## Unreleased
 
+- Pokédex detail overlays number+types, name, height, and weight on the
+  four corners of the sprite well so the flavor box can grow to about six
+  14 px lines. When the stored entry is taller than that viewport, the
+  text auto-scrolls slowly and ping-pongs so it can be read again.
 - Pokédex detail now uses a 144×144 sprite well under the header. The
   48×48 sprite is cropped to its painted pixels and nearest-neighbor
   scaled to fill that well, so the Pokémon is no longer a small tile in
