@@ -827,11 +827,10 @@ void demo_pokedex_debug_line(const char *line)
             show_view(VIEW_NAME);
         }
     } else if (strncmp(line, "FAP_POKEDEX_LANG ", 17) == 0) {
+        /* 仅观测:改当前屏,不写 NVS。保存语言只走确定双击。 */
         s_lang = (line[17] == 'z' || line[17] == 'Z')
                  ? POKEDEX_LANG_ZH : POKEDEX_LANG_EN;
-        s_lang_dirty = true;
         ui_rebuild();
-        wake_worker();
     } else if (strncmp(line, "FAP_POKEDEX_ID ", 15) == 0) {
         uint32_t id = (uint32_t)atoi(line + 15);
         if (pokedex_id_in_range(id)) goto_id(id);
